@@ -22,7 +22,7 @@ module ersem_bacteria_docdyn
       type (type_dependency_id)     :: id_ETW,id_eO2mO2
       type (type_state_variable_id),allocatable,dimension(:) :: id_RPc,id_RPp,id_RPn,id_RPf
       type (type_model_id),         allocatable,dimension(:) :: id_RP
-      type (type_diagnostic_variable_id) :: id_fB1O3c
+      type (type_diagnostic_variable_id) :: id_fB1O3c, id_BGE
 
       ! Parameters
       integer  :: nRP
@@ -155,6 +155,7 @@ contains
 
       ! Register diagnostics.
       call self%register_diagnostic_variable(self%id_fB1O3c,'fB1O3c','mg C/m^3/d','respiration',output=output_time_step_averaged)
+      call self%register_diagnostic_variable(self%id_BGE,'BGE','%','BGE',output=output_time_step_averaged)
 
       ! Contribute to aggregate fluxes.
       call self%add_to_aggregate_variable(bacterial_respiration_rate,self%id_fB1O3c)
@@ -282,6 +283,7 @@ contains
          ELSE
             BGE=0._rk
          ENDIF
+          _SET_DIAGNOSTIC_(self%id_BGE,BGE)
 
 !..Source equations
 
