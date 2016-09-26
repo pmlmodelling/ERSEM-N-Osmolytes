@@ -122,6 +122,10 @@ contains
       call self%get_parameter(self%beta,  'beta', 'mg C m^2/mg Chl/W/d','photoinhibition parameter')
       call self%get_parameter(self%phim,  'phim', 'mg Chl/mg C','maximum effective chlorophyll to carbon photosynthesis ratio')
       call self%get_parameter(self%Limnut,'Limnut','',          'nitrogen-phosphorus colimitation formulation (0: geometric mean, 1: minimum, 2: harmonic mean)')
+      call self%get_parameter(self%nsmin,  'nsmin', 'mg Ns/mg C','min N-osmolytes to carbon ratio')
+      call self%get_parameter(self%nsmax,  'nsmax', 'mg Ns/mg C','max N-osmolytes to carbon ratio')
+      call self%get_parameter(self%nsx,  'nsx', 'mg Ns/d ','max  rate of Ns production under stress')
+
       call self%get_parameter(self%docdyn,'docdyn','','use dynamic ratio of labile to semi-labile DOM production', default=.false.)
       if (.not.self%docdyn) call self%get_parameter(self%R1R2,'R1R2','-','labile fraction of produced dissolved organic carbon')
       call self%get_parameter(self%uB1c_O2,'uB1c_O2','mmol O_2/mg C','oxygen produced per unit of carbon fixed')
@@ -232,8 +236,8 @@ contains
 
    ! !LOCAL VARIABLES:
       real(rk) :: ETW,parEIR
-      real(rk) :: c, p, n, Chl
-      real(rk) :: cP,pP,nP,sP,ChlP
+      real(rk) :: c, p, n, Chl,Ns
+      real(rk) :: cP,pP,nP,sP,ChlP,NsP
       real(rk) :: N5s,N1pP,N3nP,N4nP
       real(rk) :: iNn,iNp,iNs,iNf,iNI
       real(rk) :: qpc,qnc
@@ -250,7 +254,7 @@ contains
       real(rk) :: runp,misp,rump
       real(rk) :: runn,misn,rumn,rumn3,rumn4
       real(rk) :: et,pe_RP
-      real(rk) :: rho,Chl_inc,Chl_loss
+      real(rk) :: rho,Chl_inc,Chl_loss,Ns_inc,Ns_loss
       real(rk) :: ChlCpp
       real(rk) :: N7fP,f,fP,qfc
       real(rk) :: runf,rumf,misf
@@ -269,12 +273,14 @@ contains
          _GET_WITH_BACKGROUND_(self%id_p,p)
          _GET_WITH_BACKGROUND_(self%id_n,n)
          _GET_WITH_BACKGROUND_(self%id_chl,Chl)
+         _GET_WITH_BACKGROUND_(self%id_Ns,Ns)
 
          ! Concentrations excluding background (used in sink terms)
          _GET_(self%id_c,cP)
          _GET_(self%id_p,pP)
          _GET_(self%id_n,nP)
          _GET_(self%id_chl,ChlP)
+         _GET_(self%id_Ns,NsP)
 
          ! Retrieve ambient nutrient concentrations
          _GET_(self%id_N1p,N1pP)
@@ -290,6 +296,7 @@ contains
          qpc = p/c
          qnc = n/c
          ChlCpp = Chl/c
+         NsCpp= Ns/c
 
          ! Regulation factors...................................................
 
@@ -441,14 +448,21 @@ contains
          else
            Chl_inc = iNI*rho*(sum-sra-seo-sea)*c 
          endif
-         Chl_loss = (sdo+srs)*ChlP 
+         Chl_loss = (sdo+srs)*ChlP
+
+         ! Ns changes (note that Ns is a component of PXc and not involved
+         ! in mass balance)
+          Ns_inc=self%nsmin*(sum-sra-seo-sea)*c + self%nsx*(1._rk-iNI)*(NsCpp-self%nsmax)*c
+          Ns_loss = (sdo+srs)*NsP 
 
          _SET_ODE_(self%id_c,(fO3PIc-fPIO3c-fPIRPc-fPIRDc))
 
          _SET_ODE_(self%id_R1c,fPIR1c)
+         _SET_ODE_(self%id_R1Ns,Ns_loss)
          _SET_ODE_(self%id_R2c,fPIR2c)
          _SET_ODE_(self%id_RPc,fPIRPc)
          _SET_ODE_(self%id_chl,(Chl_inc - Chl_loss))
+         _SET_ODE_(self%id_Ns,(Ns_inc - Ns_loss))
 
          _SET_ODE_(self%id_O3c,(fPIO3c - fO3PIc)/CMass)
          _SET_ODE_(self%id_O2o,(fO3PIc*self%uB1c_O2 - fPIO3c*self%urB1_O2))
@@ -605,6 +619,7 @@ contains
          _SET_VERTICAL_MOVEMENT_(self%id_n,SD)
          if (self%use_Si) _SET_VERTICAL_MOVEMENT_(self%id_s,SD)
          _SET_VERTICAL_MOVEMENT_(self%id_chl,SD)
+         _SET_VERTICAL_MOVEMENT_(self%id_Ns,SD)
          if (use_iron) _SET_VERTICAL_MOVEMENT_(self%id_f,SD)
 
       _LOOP_END_
