@@ -13,13 +13,13 @@ module ersem_pelagic_base
    private
 
    type,extends(type_particle_model),public :: type_ersem_pelagic_base
-      type (type_state_variable_id)                 :: id_c,id_n,id_p,id_f,id_s,id_chl,id_Ns
+      type (type_state_variable_id)                 :: id_c,id_n,id_p,id_f,id_s,id_chl,id_y
       type (type_horizontal_dependency_id)          :: id_bedstress,id_wdepth
       type (type_dependency_id)                     :: id_dens
       type (type_horizontal_diagnostic_variable_id) :: id_w_bot
 
       ! Target variables for sedimentation
-      type (type_bottom_state_variable_id),allocatable,dimension(:) :: id_targetc,id_targetn,id_targetp,id_targets,id_targetf
+      type (type_bottom_state_variable_id),allocatable,dimension(:) ::id_targetc,id_targetn,id_targetp,id_targets,id_targetf,id_targety
  
       real(rk) :: rm = 0.0_rk
       integer :: ndeposition
@@ -70,6 +70,7 @@ contains
       if (index(composition,'s')/=0) then
          call self%get_parameter(s0,'s0','mmol Si/m^3','background silicon concentration',default=qsRPIcX*c0)
          call self%add_constituent('s',0.0_rk,s0)
+      if (index(composition,'y')/=0) call self%add_constituent('y',0.0_rk)
       end if
       if (index(composition,'f')/=0) call self%add_constituent('f',0.0_rk)
 
@@ -129,8 +130,8 @@ contains
          if (use_iron) call register(self%id_f,'f','umol Fe','iron',standard_variables%total_iron,self%qxf,self%id_targetf)
       case ('chl')
          call register(self%id_chl,'Chl','mg','chlorophyll a',total_chlorophyll)
-      case ('Ns')
-         call register(self%id_Ns,'Ns','mg','N-osmolytes',total_Nosmolytes)
+      case ('y')
+         call register(self%id_y,'y','mg','N-osmolytes',total_Nosmolytes)
       case default
          call self%fatal_error('add_constituent','Unknown constituent "'//trim(name)//'".')
       end select
@@ -285,11 +286,11 @@ contains
             _SET_BOTTOM_EXCHANGE_(self%id_chl,-flux)
          end if
 
-         if (_AVAILABLE_(self%id_Ns)) then
-            ! Ns is simply lost by sinking:
-            _GET_(self%id_Ns,conc)
+         if (_AVAILABLE_(self%id_y)) then
+            ! y is simply lost by sinking:
+            _GET_(self%id_y,conc)
             flux = sdrate*conc
-            _SET_BOTTOM_EXCHANGE_(self%id_Ns,-flux)
+            _SET_BOTTOM_EXCHANGE_(self%id_y,-flux)
          end if
 
          end if

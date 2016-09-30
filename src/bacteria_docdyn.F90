@@ -17,12 +17,12 @@ module ersem_bacteria_docdyn
       type (type_state_variable_id) :: id_O3c, id_O2o, id_TA
       type (type_state_variable_id) :: id_R1c, id_R2c, id_R3c
       type (type_state_variable_id) :: id_R1p
-      type (type_state_variable_id) :: id_R1n, id_R1Ns
+      type (type_state_variable_id) :: id_R1n, id_R1y
       type (type_state_variable_id) :: id_N1p,id_N4n,id_N7f
       type (type_dependency_id)     :: id_ETW,id_eO2mO2
       type (type_state_variable_id),allocatable,dimension(:) :: id_RPc,id_RPp,id_RPn,id_RPf
       type (type_model_id),         allocatable,dimension(:) :: id_RP
-      type (type_diagnostic_variable_id) :: id_fB1O3c, id_BGE
+      type (type_diagnostic_variable_id) :: id_fB1O3c, id_BGE, id_yupt
 
       ! Parameters
       integer  :: nRP
@@ -105,7 +105,7 @@ contains
       call self%register_state_dependency(self%id_R1c,'R1c','mg C/m^3',  'labile dissolved organic carbon')
       call self%register_state_dependency(self%id_R1p,'R1p','mmol P/m^3','labile dissolved organic phosphorus')    
       call self%register_state_dependency(self%id_R1n,'R1n','mmol N/m^3','labile dissolved organic nitrogen')
-      call self%register_state_dependency(self%id_R1n,'R1Ns','mg C/m^3','dissolved nitrogen osmolytes')    
+      call self%register_state_dependency(self%id_R1n,'R1y','mg C/m^3','dissolved nitrogen osmolytes')    
 
       ! Register links to semi-labile dissolved organic matter pools.
       call self%register_state_dependency(self%id_R2c,'R2c','mg C/m^3','semi-labile dissolved organic carbon')    
@@ -157,6 +157,7 @@ contains
       ! Register diagnostics.
       call self%register_diagnostic_variable(self%id_fB1O3c,'fB1O3c','mg C/m^3/d','respiration',output=output_time_step_averaged)
       call self%register_diagnostic_variable(self%id_BGE,'BGE','%','BGE',output=output_time_step_averaged)
+      call self%register_diagnostic_variable(self%id_yupt,'yupt','mg y/m^3/d','yupt',output=output_time_step_averaged)
 
       ! Contribute to aggregate fluxes.
       call self%add_to_aggregate_variable(bacterial_respiration_rate,self%id_fB1O3c)
@@ -172,7 +173,7 @@ contains
       real(rk) :: ETW,eO2mO2
       real(rk) :: B1c,B1n,B1p
       real(rk) :: B1cP,B1nP,B1pP
-      real(rk) :: N1pP,N4nP,R1c,R1cP,R1pP,R1nP,R2c,R1Ns,R1NsP
+      real(rk) :: N1pP,N4nP,R1c,R1cP,R1pP,R1nP,R2c,R1y,R1yP
       real(rk) :: qpB1c,qnB1c
       real(rk) :: etB1,eO2B1
       real(rk) :: sB1RD,sutB1,rumB1,sugB1,rugB1,rraB1,fB1O3c
@@ -209,7 +210,7 @@ contains
          _GET_(self%id_R1c,R1cP)
          _GET_(self%id_R1p,R1pP)
          _GET_(self%id_R1n,R1nP)
-         _GET_(self%id_R1Ns,R1NsP)
+         _GET_(self%id_R1y,R1yP)
 
          _GET_WITH_BACKGROUND_(self%id_R3c,R3c)
          _GET_(self%id_R2c,R2cP)
@@ -292,7 +293,7 @@ contains
 
          _SET_ODE_(self%id_c,netb1)
          _SET_ODE_(self%id_R1c,+ fB1R1c - sugB1*R1cP)
-         _SET_ODE_(self%id_R1Ns, - sugB1*R1NsP)
+         _SET_ODE_(self%id_R1y, - sugB1*R1yP)
          _SET_ODE_(self%id_R2c,+ fB1R2c - sugB1*R2cP*self%rR2B1X)
          _SET_ODE_(self%id_R3c,+ fB1R3c - sugB1*R3cP*self%rR3B1X)
          do iRP=1,self%nRP
@@ -301,7 +302,7 @@ contains
 
          _SET_ODE_(self%id_O3c,+ fB1O3c/CMass)
          _SET_ODE_(self%id_O2o,- fB1O3c*self%urB1_O2X)
-
+         _SET_DIAGNOSTIC_(self%id_yupt,sugB1*R1yP)
 !..Phosphorus dynamics in bacteria........................................
 
          IF ((qpB1c - self%qpB1cX).gt.0._rk) THEN

@@ -38,7 +38,7 @@ module ersem_primary_producer
       ! Identifiers for state variables of other models
       type (type_state_variable_id) :: id_O3c,id_O2o,id_TA                  ! dissolved inorganic carbon, oxygen, total alkalinity
       type (type_state_variable_id) :: id_N1p,id_N3n,id_N4n,id_N5s,id_N7f   ! nutrients: phosphate, nitrate, ammonium, silicate, iron
-      type (type_state_variable_id) :: id_R1c,id_R1p,id_R1n,id_R2c          ! dissolved organic carbon (R1: labile, R2: semi-labile)
+      type (type_state_variable_id) :: id_R1c,id_R1p,id_R1n,id_R1y,id_R2c          ! dissolved organic carbon (R1: labile, R2: semi-labile)
       type (type_state_variable_id) :: id_RPc,id_RPp,id_RPn,id_RPs,id_RPf   ! particulate organic carbon
       type (type_state_variable_id) :: id_L2c                               ! Free calcite (liths) - used by calcifiers only
 
@@ -52,10 +52,11 @@ module ersem_primary_producer
       type (type_diagnostic_variable_id) :: id_fPIO3c  ! Respiration rate
       type (type_diagnostic_variable_id) :: id_netPI   ! Net primary production rate
       type (type_diagnostic_variable_id) :: id_lD      ! Cell-bound calcite - used by calcifiers only
+      type (type_diagnostic_variable_id) :: id_yrel, id_yprod
 
       ! Parameters (described in subroutine initialize, below)
       real(rk) :: sum
-      real(rk) :: q10,srs,pu_ea,pu_ra,chs,qnlc,qplc,xqcp
+      real(rk) :: q10,srs,pu_ea,pu_ra,chs,qnlc,qplc,xqcp, nsmin,nsmax,nsx
       real(rk) :: xqcn,xqn,xqp,qun3,qun4,qurp,qsc,esni,snplux
       real(rk) :: resm,sdo
       real(rk) :: alpha,beta,phim
@@ -122,9 +123,9 @@ contains
       call self%get_parameter(self%beta,  'beta', 'mg C m^2/mg Chl/W/d','photoinhibition parameter')
       call self%get_parameter(self%phim,  'phim', 'mg Chl/mg C','maximum effective chlorophyll to carbon photosynthesis ratio')
       call self%get_parameter(self%Limnut,'Limnut','',          'nitrogen-phosphorus colimitation formulation (0: geometric mean, 1: minimum, 2: harmonic mean)')
-      call self%get_parameter(self%nsmin,  'nsmin', 'mg Ns/mg C','min N-osmolytes to carbon ratio')
-      call self%get_parameter(self%nsmax,  'nsmax', 'mg Ns/mg C','max N-osmolytes to carbon ratio')
-      call self%get_parameter(self%nsx,  'nsx', 'mg Ns/d ','max  rate of Ns production under stress')
+      call self%get_parameter(self%nsmin,  'nsmin', 'mg y/mg C','min N-osmolytes to carbon ratio')
+      call self%get_parameter(self%nsmax,  'nsmax', 'mg y/mg C','max N-osmolytes to carbon ratio')
+      call self%get_parameter(self%nsx,  'nsx', 'mg y/d ','max  rate of y production under stress')
 
       call self%get_parameter(self%docdyn,'docdyn','','use dynamic ratio of labile to semi-labile DOM production', default=.false.)
       if (.not.self%docdyn) call self%get_parameter(self%R1R2,'R1R2','-','labile fraction of produced dissolved organic carbon')
@@ -152,6 +153,7 @@ contains
       call self%add_constituent('p',4.288e-8_rk,c0*qprpicX)
       call self%add_constituent('f',5.e-6_rk,   0.0_rk)  ! NB this does nothing if iron support is disabled.
       call self%add_constituent('chl',3.e-6_rk, c0*self%phim)
+      call self%add_constituent('y',3.e-6_rk, 0._rk)
       if (self%use_Si) call self%add_constituent('s',1.e-6_rk,c0*self%qsc)
 
       ! Register links to external nutrient pools.
@@ -165,6 +167,7 @@ contains
       call self%register_state_dependency(self%id_R1c,'R1c','mg C/m^3',  'dissolved organic carbon')
       call self%register_state_dependency(self%id_R1p,'R1p','mmol P/m^3','dissolved organic phosphorus')
       call self%register_state_dependency(self%id_R1n,'R1n','mmol N/m^3','dissolved organic nitrogen')
+      call self%register_state_dependency(self%id_R1y,'R1y','mg /m^3','dissolved N-osmolytes')
 
       ! Register links to external semi-labile dissolved organic matter pool (sink for excretion and lysis).
       call self%register_state_dependency(self%id_R2c,'R2c','mg C/m^3','semi-labile dissolved organic carbon')
@@ -195,7 +198,8 @@ contains
       call self%register_diagnostic_variable(self%id_netPI, 'netPI', 'mg C/m^3/d','net primary production',  output=output_time_step_averaged)
       call self%register_diagnostic_variable(self%id_fO3PIc,'fO3PIc','mg C/m^3/d','gross primary production',output=output_time_step_averaged)
       call self%register_diagnostic_variable(self%id_fPIO3c,'fPIO3c','mg C/m^3/d','respiration',             output=output_time_step_averaged)
-
+      call self%register_diagnostic_variable(self%id_yprod,'yprod','mg /m^3/d','N-osmolites production', output=output_time_step_averaged)
+      call self%register_diagnostic_variable(self%id_yrel,'yrel','mg /m^3/d','N-osmolites release', output=output_time_step_averaged) 
       ! Contribute to aggregate fluxes.
       call self%add_to_aggregate_variable(phytoplankton_respiration_rate,self%id_fPIO3c)
       call self%add_to_aggregate_variable(photosynthesis_rate,self%id_fO3PIc)
@@ -236,8 +240,8 @@ contains
 
    ! !LOCAL VARIABLES:
       real(rk) :: ETW,parEIR
-      real(rk) :: c, p, n, Chl,Ns
-      real(rk) :: cP,pP,nP,sP,ChlP,NsP
+      real(rk) :: c, p, n, Chl,y
+      real(rk) :: cP,pP,nP,sP,ChlP,yP
       real(rk) :: N5s,N1pP,N3nP,N4nP
       real(rk) :: iNn,iNp,iNs,iNf,iNI
       real(rk) :: qpc,qnc
@@ -254,8 +258,8 @@ contains
       real(rk) :: runp,misp,rump
       real(rk) :: runn,misn,rumn,rumn3,rumn4
       real(rk) :: et,pe_RP
-      real(rk) :: rho,Chl_inc,Chl_loss,Ns_inc,Ns_loss
-      real(rk) :: ChlCpp
+      real(rk) :: rho,Chl_inc,Chl_loss,y_inc,y_loss
+      real(rk) :: ChlCpp,yCpp
       real(rk) :: N7fP,f,fP,qfc
       real(rk) :: runf,rumf,misf
       real(rk) :: fN7PIf,fPIRPf
@@ -273,14 +277,14 @@ contains
          _GET_WITH_BACKGROUND_(self%id_p,p)
          _GET_WITH_BACKGROUND_(self%id_n,n)
          _GET_WITH_BACKGROUND_(self%id_chl,Chl)
-         _GET_WITH_BACKGROUND_(self%id_Ns,Ns)
+         _GET_WITH_BACKGROUND_(self%id_y,y)
 
          ! Concentrations excluding background (used in sink terms)
          _GET_(self%id_c,cP)
          _GET_(self%id_p,pP)
          _GET_(self%id_n,nP)
          _GET_(self%id_chl,ChlP)
-         _GET_(self%id_Ns,NsP)
+         _GET_(self%id_y,yP)
 
          ! Retrieve ambient nutrient concentrations
          _GET_(self%id_N1p,N1pP)
@@ -296,7 +300,7 @@ contains
          qpc = p/c
          qnc = n/c
          ChlCpp = Chl/c
-         NsCpp= Ns/c
+         yCpp= y/c
 
          ! Regulation factors...................................................
 
@@ -450,19 +454,19 @@ contains
          endif
          Chl_loss = (sdo+srs)*ChlP
 
-         ! Ns changes (note that Ns is a component of PXc and not involved
+         ! y changes (note that y is a component of PXc and not involved
          ! in mass balance)
-          Ns_inc=self%nsmin*(sum-sra-seo-sea)*c + self%nsx*(1._rk-iNI)*(NsCpp-self%nsmax)*c
-          Ns_loss = (sdo+srs)*NsP 
+          y_inc=self%nsmin*(sum-sra-seo-sea)*c + self%nsx*(1._rk-iNI)*(yCpp-self%nsmax)*c
+          y_loss = (sdo+srs)*yP 
 
          _SET_ODE_(self%id_c,(fO3PIc-fPIO3c-fPIRPc-fPIRDc))
 
          _SET_ODE_(self%id_R1c,fPIR1c)
-         _SET_ODE_(self%id_R1Ns,Ns_loss)
+         _SET_ODE_(self%id_R1y,y_loss)
          _SET_ODE_(self%id_R2c,fPIR2c)
          _SET_ODE_(self%id_RPc,fPIRPc)
          _SET_ODE_(self%id_chl,(Chl_inc - Chl_loss))
-         _SET_ODE_(self%id_Ns,(Ns_inc - Ns_loss))
+         _SET_ODE_(self%id_y,(y_inc - y_loss))
 
          _SET_ODE_(self%id_O3c,(fPIO3c - fO3PIc)/CMass)
          _SET_ODE_(self%id_O2o,(fO3PIc*self%uB1c_O2 - fPIO3c*self%urB1_O2))
@@ -470,6 +474,8 @@ contains
          ! Save rates of photosynthesis (a.k.a., gross primary production) and respiration
          _SET_DIAGNOSTIC_(self%id_fPIO3c,fPIO3c)
          _SET_DIAGNOSTIC_(self%id_fO3PIc,fO3PIc)
+         _SET_DIAGNOSTIC_(self%id_yprod,y_inc)
+         _SET_DIAGNOSTIC_(self%id_yrel,y_loss)
 
          ! Phosphorus flux...........................................
 
@@ -619,7 +625,7 @@ contains
          _SET_VERTICAL_MOVEMENT_(self%id_n,SD)
          if (self%use_Si) _SET_VERTICAL_MOVEMENT_(self%id_s,SD)
          _SET_VERTICAL_MOVEMENT_(self%id_chl,SD)
-         _SET_VERTICAL_MOVEMENT_(self%id_Ns,SD)
+         _SET_VERTICAL_MOVEMENT_(self%id_y,SD)
          if (use_iron) _SET_VERTICAL_MOVEMENT_(self%id_f,SD)
 
       _LOOP_END_

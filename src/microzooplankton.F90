@@ -15,10 +15,10 @@ module ersem_microzooplankton
    type,extends(type_ersem_pelagic_base),public :: type_ersem_microzooplankton
       ! Variables
       type (type_model_id),         allocatable,dimension(:) :: id_prey
-      type (type_dependency_id),    allocatable,dimension(:) :: id_preyc,id_preyn,id_preyp,id_preys,id_preyf,id_preyl
+      type (type_dependency_id),    allocatable,dimension(:) :: id_preyc,id_preyn,id_preyp,id_preys,id_preyf,id_preyl,id_preyy
       type (type_state_variable_id),allocatable,dimension(:) :: id_preyf_target
       type (type_state_variable_id)      :: id_O3c,id_O2o,id_L2c,id_TA
-      type (type_state_variable_id)      :: id_R1c,id_R1p,id_R1n
+      type (type_state_variable_id)      :: id_R1c,id_R1p,id_R1n,id_R1y
       type (type_state_variable_id)      :: id_R2c
       type (type_state_variable_id)      :: id_RPc,id_RPp,id_RPn,id_RPs
       type (type_state_variable_id)      :: id_N1p,id_N4n
@@ -105,6 +105,7 @@ contains
       allocate(self%id_preyf(self%nprey))
       allocate(self%id_preys(self%nprey))
       allocate(self%id_preyl(self%nprey))
+      allocate(self%id_preyy(self%nprey))
       allocate(self%id_preyf_target(self%nprey))
       allocate(self%suprey(self%nprey))
       do iprey=1,self%nprey
@@ -115,6 +116,7 @@ contains
          call self%register_dependency(self%id_preyp(iprey),'prey'//trim(index)//'p','mmol P/m^3', 'prey '//trim(index)//' phosphorus')
          call self%register_dependency(self%id_preys(iprey),'prey'//trim(index)//'s','mmol Si/m^3','prey '//trim(index)//' silicate')
          call self%register_dependency(self%id_preyl(iprey),'prey'//trim(index)//'l','mg C/m^3',   'prey '//trim(index)//' calcite')
+         call self%register_dependency(self%id_preyy(iprey),'prey'//trim(index)//'y','mg Nos/m^3',   'prey '//trim(index)//'N-osmolytes')
 
          call self%register_model_dependency(self%id_prey(iprey),'prey'//trim(index))
          call self%request_coupling_to_model(self%id_preyc(iprey),self%id_prey(iprey),standard_variables%total_carbon)
@@ -122,6 +124,7 @@ contains
          call self%request_coupling_to_model(self%id_preyp(iprey),self%id_prey(iprey),standard_variables%total_phosphorus)
          call self%request_coupling_to_model(self%id_preys(iprey),self%id_prey(iprey),standard_variables%total_silicate)
          call self%request_coupling_to_model(self%id_preyl(iprey),self%id_prey(iprey),total_calcite_in_biota)
+         call self%request_coupling_to_model(self%id_preyy(iprey),self%id_prey(iprey),total_Nosmolytes)
 
          if (use_iron) then
             call self%register_dependency(self%id_preyf(iprey),'prey'//trim(index)//'f','umol Fe/m^3','prey '//trim(index)//' iron')
@@ -138,6 +141,7 @@ contains
       call self%register_state_dependency(self%id_R1c,'R1c','mg C/m^3',  'dissolved organic carbon')
       call self%register_state_dependency(self%id_R1p,'R1p','mmol P/m^3','dissolved organic phosphorus')
       call self%register_state_dependency(self%id_R1n,'R1n','mmol N/m^3','dissolved organic nitrogen')
+      call self%register_state_dependency(self%id_R1y,'R1y','mmol Nos/m^3','dissolved nitrogen osmolytes')
 
       ! Register links to external semi-labile dissolved organic matter pools.
       call self%register_state_dependency(self%id_R2c,'R2c','mg C/m^3','semi-labile dissolved organic carbon')
@@ -181,8 +185,8 @@ contains
       integer  :: iprey,istate
       real(rk) :: ETW,eO2mO2
       real(rk) :: c,p,n,cP,nP,pP
-      real(rk),dimension(self%nprey) :: preycP,preypP,preynP,preysP,preylP
-      real(rk),dimension(self%nprey) :: sprey,rupreyc,fpreyc
+      real(rk),dimension(self%nprey) :: preycP,preypP,preynP,preysP,preylP,preyyP
+      real(rk),dimension(self%nprey) :: sprey,rupreyc,fpreyc,preyCY
       real(rk) :: preyP
       real(rk) :: et,CORROX,eO2
       real(rk) :: rum,put_u,rug
@@ -219,10 +223,12 @@ contains
             _GET_(self%id_preyp(iprey), preypP(iprey))
             _GET_(self%id_preys(iprey), preysP(iprey))
             _GET_(self%id_preyl(iprey), preylP(iprey))
+            _GET_(self%id_preyy(iprey), preyyP(iprey))
          end do
 
          ! Prey carbon was returned in mmol (due to units of standard_variables%total_carbon); convert to mg
          preycP = preycP*CMass
+         preyCY=preyyP/preycP
 
          ! Phosphorus to carbon ratio and nitrogen to carbon ratio.
          ! Note: these are protected against division by zero because c includes the background concentration.
@@ -302,6 +308,7 @@ contains
 
          ! Carbon flux to labile dissolved, refractory dissolved, and particulate organic matter.
          _SET_ODE_(self%id_R1c, + fZIRDc * self%R1R2)
+         _SET_ODE_(self%id_R1y, + (fZIRDc * self%R1R2)*preyCY)
          _SET_ODE_(self%id_R2c, + fZIRDc * (1._rk-self%R1R2))
          _SET_ODE_(self%id_RPc, + fZIRPc)
 
