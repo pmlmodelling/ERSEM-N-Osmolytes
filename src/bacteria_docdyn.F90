@@ -22,7 +22,7 @@ module ersem_bacteria_docdyn
       type (type_dependency_id)     :: id_ETW,id_eO2mO2
       type (type_state_variable_id),allocatable,dimension(:) :: id_RPc,id_RPp,id_RPn,id_RPf
       type (type_model_id),         allocatable,dimension(:) :: id_RP
-      type (type_diagnostic_variable_id) :: id_fB1O3c, id_BGE, id_yupt
+      type (type_diagnostic_variable_id) :: id_fB1O3c, id_BGE, id_fR1B1y
 
       ! Parameters
       integer  :: nRP
@@ -105,7 +105,7 @@ contains
       call self%register_state_dependency(self%id_R1c,'R1c','mg C/m^3',  'labile dissolved organic carbon')
       call self%register_state_dependency(self%id_R1p,'R1p','mmol P/m^3','labile dissolved organic phosphorus')    
       call self%register_state_dependency(self%id_R1n,'R1n','mmol N/m^3','labile dissolved organic nitrogen')
-      call self%register_state_dependency(self%id_R1n,'R1y','mg C/m^3','dissolved nitrogen osmolytes')    
+      call self%register_state_dependency(self%id_R1y,'R1y','mg C/m^3','dissolved nitrogen osmolytes')    
 
       ! Register links to semi-labile dissolved organic matter pools.
       call self%register_state_dependency(self%id_R2c,'R2c','mg C/m^3','semi-labile dissolved organic carbon')    
@@ -157,7 +157,7 @@ contains
       ! Register diagnostics.
       call self%register_diagnostic_variable(self%id_fB1O3c,'fB1O3c','mg C/m^3/d','respiration',output=output_time_step_averaged)
       call self%register_diagnostic_variable(self%id_BGE,'BGE','%','BGE',output=output_time_step_averaged)
-      call self%register_diagnostic_variable(self%id_yupt,'yupt','mg y/m^3/d','yupt',output=output_time_step_averaged)
+      call self%register_diagnostic_variable(self%id_fR1B1y,'fR1B1y','mg y/m^3/d','fR1B1y',output=output_time_step_averaged)
 
       ! Contribute to aggregate fluxes.
       call self%add_to_aggregate_variable(bacterial_respiration_rate,self%id_fB1O3c)
@@ -302,7 +302,7 @@ contains
 
          _SET_ODE_(self%id_O3c,+ fB1O3c/CMass)
          _SET_ODE_(self%id_O2o,- fB1O3c*self%urB1_O2X)
-         _SET_DIAGNOSTIC_(self%id_yupt,sugB1*R1yP)
+         _SET_DIAGNOSTIC_(self%id_fR1B1y,sugB1*R1yP)
 !..Phosphorus dynamics in bacteria........................................
 
          IF ((qpB1c - self%qpB1cX).gt.0._rk) THEN

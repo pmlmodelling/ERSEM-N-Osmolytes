@@ -24,7 +24,7 @@ module ersem_microzooplankton
       type (type_state_variable_id)      :: id_N1p,id_N4n
       type (type_dependency_id)          :: id_ETW,id_eO2mO2
 
-      type (type_diagnostic_variable_id) :: id_fZIO3c
+      type (type_diagnostic_variable_id) :: id_fZIO3c, id_fZIR1y
 
       ! Parameters
       integer  :: nprey
@@ -171,6 +171,7 @@ contains
 
       ! Register diagnostics
       call self%register_diagnostic_variable(self%id_fZIO3c,'fZIO3c','mg C/m^3/d','respiration',output=output_time_step_averaged)
+      call self%register_diagnostic_variable(self%id_fZIR1y,'fZIR1y','mg /m^3/d','NoS production',output=output_time_step_averaged)
 
       ! Contribute to aggregate fluxes.
       call self%add_to_aggregate_variable(zooplankton_respiration_rate,self%id_fZIO3c)
@@ -186,7 +187,7 @@ contains
       real(rk) :: ETW,eO2mO2
       real(rk) :: c,p,n,cP,nP,pP
       real(rk),dimension(self%nprey) :: preycP,preypP,preynP,preysP,preylP,preyyP
-      real(rk),dimension(self%nprey) :: sprey,rupreyc,fpreyc,preyCY
+      real(rk),dimension(self%nprey) :: sprey,rupreyc,fpreyc
       real(rk) :: preyP
       real(rk) :: et,CORROX,eO2
       real(rk) :: rum,put_u,rug
@@ -197,7 +198,7 @@ contains
       real(rk) :: ret,fZIRDc,fZIRPc
       real(rk) :: fZIRIp,fZIRDp,fZIRPp
       real(rk) :: fZIRIn,fZIRDn,fZIRPn
-      real(rk) :: qpc,qnc,fZIN1p,fZINIn
+      real(rk) :: qpc,qnc,fZIN1p,fZINIn,preyCY
 
       ! Enter spatial loops (if any)
       _LOOP_BEGIN_
@@ -228,7 +229,7 @@ contains
 
          ! Prey carbon was returned in mmol (due to units of standard_variables%total_carbon); convert to mg
          preycP = preycP*CMass
-         preyCY=preyyP/preycP
+         preyCY=sum(preyyP)/sum(preycP)
 
          ! Phosphorus to carbon ratio and nitrogen to carbon ratio.
          ! Note: these are protected against division by zero because c includes the background concentration.
@@ -308,9 +309,11 @@ contains
 
          ! Carbon flux to labile dissolved, refractory dissolved, and particulate organic matter.
          _SET_ODE_(self%id_R1c, + fZIRDc * self%R1R2)
-         _SET_ODE_(self%id_R1y, + (fZIRDc * self%R1R2)*preyCY)
+         _SET_ODE_(self%id_R1y, + (ret * self%R1R2)*preyCY)
          _SET_ODE_(self%id_R2c, + fZIRDc * (1._rk-self%R1R2))
          _SET_ODE_(self%id_RPc, + fZIRPc)
+
+         _SET_DIAGNOSTIC_(self%id_fZIR1y,(fZIRDc * self%R1R2)*preyCY)
 
          ! Account for CO2 production and oxygen consumption in respiration.
          _SET_ODE_(self%id_O3c, + fZIO3c/CMass)

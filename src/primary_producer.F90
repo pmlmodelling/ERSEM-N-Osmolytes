@@ -52,7 +52,7 @@ module ersem_primary_producer
       type (type_diagnostic_variable_id) :: id_fPIO3c  ! Respiration rate
       type (type_diagnostic_variable_id) :: id_netPI   ! Net primary production rate
       type (type_diagnostic_variable_id) :: id_lD      ! Cell-bound calcite - used by calcifiers only
-      type (type_diagnostic_variable_id) :: id_yrel, id_yprod
+      type (type_diagnostic_variable_id) :: id_fPIR1y, id_yprod
 
       ! Parameters (described in subroutine initialize, below)
       real(rk) :: sum
@@ -199,7 +199,7 @@ contains
       call self%register_diagnostic_variable(self%id_fO3PIc,'fO3PIc','mg C/m^3/d','gross primary production',output=output_time_step_averaged)
       call self%register_diagnostic_variable(self%id_fPIO3c,'fPIO3c','mg C/m^3/d','respiration',             output=output_time_step_averaged)
       call self%register_diagnostic_variable(self%id_yprod,'yprod','mg /m^3/d','N-osmolites production', output=output_time_step_averaged)
-      call self%register_diagnostic_variable(self%id_yrel,'yrel','mg /m^3/d','N-osmolites release', output=output_time_step_averaged) 
+      call self%register_diagnostic_variable(self%id_fPIR1y,'fPIR1y','mg /m^3/d','N-osmolites release', output=output_time_step_averaged) 
       ! Contribute to aggregate fluxes.
       call self%add_to_aggregate_variable(phytoplankton_respiration_rate,self%id_fPIO3c)
       call self%add_to_aggregate_variable(photosynthesis_rate,self%id_fO3PIc)
@@ -243,7 +243,7 @@ contains
       real(rk) :: c, p, n, Chl,y
       real(rk) :: cP,pP,nP,sP,ChlP,yP
       real(rk) :: N5s,N1pP,N3nP,N4nP
-      real(rk) :: iNn,iNp,iNs,iNf,iNI
+      real(rk) :: iNn,iNp,iNs,iNf,iNI,llim
       real(rk) :: qpc,qnc
 
       real(rk) :: srs
@@ -456,13 +456,16 @@ contains
 
          ! y changes (note that y is a component of PXc and not involved
          ! in mass balance)
-          y_inc=self%nsmin*(sum-sra-seo-sea)*c + self%nsx*(1._rk-iNI)*(yCpp-self%nsmax)*c
+         ! y_inc=self%nsmin*(sum-sra-seo-sea)*c + self%nsx*(1._rk-iNI)*(self%nsmax-yCpp)*c
+         ! llim=min(1._rk, 200./parEIR)
+          llim=.6
+          y_inc=self%nsmin*(sum-sra-seo-sea)*c + self%nsx*max(0._rk,(1._rk-iNI/llim))*(1._rk-yCpp/self%nsmax)*c
           y_loss = (sdo+srs)*yP 
 
          _SET_ODE_(self%id_c,(fO3PIc-fPIO3c-fPIRPc-fPIRDc))
 
          _SET_ODE_(self%id_R1c,fPIR1c)
-         _SET_ODE_(self%id_R1y,y_loss)
+         _SET_ODE_(self%id_R1y,sdo*yP)
          _SET_ODE_(self%id_R2c,fPIR2c)
          _SET_ODE_(self%id_RPc,fPIRPc)
          _SET_ODE_(self%id_chl,(Chl_inc - Chl_loss))
@@ -475,7 +478,7 @@ contains
          _SET_DIAGNOSTIC_(self%id_fPIO3c,fPIO3c)
          _SET_DIAGNOSTIC_(self%id_fO3PIc,fO3PIc)
          _SET_DIAGNOSTIC_(self%id_yprod,y_inc)
-         _SET_DIAGNOSTIC_(self%id_yrel,y_loss)
+         _SET_DIAGNOSTIC_(self%id_fPIR1y,sdo*yP)
 
          ! Phosphorus flux...........................................
 
