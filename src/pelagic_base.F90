@@ -131,7 +131,7 @@ contains
       case ('chl')
          call register(self%id_chl,'Chl','mg','chlorophyll a',total_chlorophyll)
       case ('y')
-         call register(self%id_y,'y','mg','N-osmolytes',total_Nosmolytes)
+         call register(self%id_y,'y','umol','N-osmolytes',total_Nosmolytes)
       case default
          call self%fatal_error('add_constituent','Unknown constituent "'//trim(name)//'".')
       end select

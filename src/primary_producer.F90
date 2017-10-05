@@ -56,7 +56,7 @@ module ersem_primary_producer
 
       ! Parameters (described in subroutine initialize, below)
       real(rk) :: sum
-      real(rk) :: q10,srs,pu_ea,pu_ra,chs,qnlc,qplc,xqcp, nsmin,nsmax,nsx
+      real(rk) :: q10,srs,pu_ea,pu_ra,chs,qnlc,qplc,xqcp, nsmin,nsmax,nsx,llim
       real(rk) :: xqcn,xqn,xqp,qun3,qun4,qurp,qsc,esni,snplux
       real(rk) :: resm,sdo
       real(rk) :: alpha,beta,phim
@@ -123,9 +123,10 @@ contains
       call self%get_parameter(self%beta,  'beta', 'mg C m^2/mg Chl/W/d','photoinhibition parameter')
       call self%get_parameter(self%phim,  'phim', 'mg Chl/mg C','maximum effective chlorophyll to carbon photosynthesis ratio')
       call self%get_parameter(self%Limnut,'Limnut','',          'nitrogen-phosphorus colimitation formulation (0: geometric mean, 1: minimum, 2: harmonic mean)')
-      call self%get_parameter(self%nsmin,  'nsmin', 'mg y/mg C','min N-osmolytes to carbon ratio')
-      call self%get_parameter(self%nsmax,  'nsmax', 'mg y/mg C','max N-osmolytes to carbon ratio')
-      call self%get_parameter(self%nsx,  'nsx', 'mg y/d ','max  rate of y production under stress')
+      call self%get_parameter(self%nsmin,  'nsmin', 'umol y/mg C','min N-osmolytes to carbon ratio')
+      call self%get_parameter(self%nsmax,  'nsmax', 'umol y/mg C','max N-osmolytes to carbon ratio')
+      call self%get_parameter(self%nsx,  'nsx', 'umol y/mg C/ d ','max specific rate of y production under stress')
+      call self%get_parameter(self%llim,  'llim', 'adim','nutrient threshold scaling factor')
 
       call self%get_parameter(self%docdyn,'docdyn','','use dynamic ratio of labile to semi-labile DOM production', default=.false.)
       if (.not.self%docdyn) call self%get_parameter(self%R1R2,'R1R2','-','labile fraction of produced dissolved organic carbon')
@@ -167,7 +168,7 @@ contains
       call self%register_state_dependency(self%id_R1c,'R1c','mg C/m^3',  'dissolved organic carbon')
       call self%register_state_dependency(self%id_R1p,'R1p','mmol P/m^3','dissolved organic phosphorus')
       call self%register_state_dependency(self%id_R1n,'R1n','mmol N/m^3','dissolved organic nitrogen')
-      call self%register_state_dependency(self%id_R1y,'R1y','mg /m^3','dissolved N-osmolytes')
+      call self%register_state_dependency(self%id_R1y,'R1y','umol /m^3','dissolved N-osmolytes')
 
       ! Register links to external semi-labile dissolved organic matter pool (sink for excretion and lysis).
       call self%register_state_dependency(self%id_R2c,'R2c','mg C/m^3','semi-labile dissolved organic carbon')
@@ -458,8 +459,8 @@ contains
          ! in mass balance)
          ! y_inc=self%nsmin*(sum-sra-seo-sea)*c + self%nsx*(1._rk-iNI)*(self%nsmax-yCpp)*c
          ! llim=min(1._rk, 200./parEIR)
-          llim=.6
-          y_inc=self%nsmin*(sum-sra-seo-sea)*c + self%nsx*max(0._rk,(1._rk-iNI/llim))*(1._rk-yCpp/self%nsmax)*c
+         ! llim=.6
+          y_inc=self%nsmin*(sum-sra-seo-sea)*c + self%nsx*max(0._rk,(1._rk-iNI/self%llim))*(1._rk-yCpp/self%nsmax)*c
           y_loss = (sdo+srs)*yP 
 
          _SET_ODE_(self%id_c,(fO3PIc-fPIO3c-fPIRPc-fPIRDc))
