@@ -51,6 +51,7 @@ module ersem_primary_producer
       type (type_diagnostic_variable_id) :: id_fO3PIc  ! Gross primary production rate
       type (type_diagnostic_variable_id) :: id_fPIO3c  ! Respiration rate
       type (type_diagnostic_variable_id) :: id_netPI   ! Net primary production rate
+      type (type_diagnostic_variable_id) :: id_ylim   ! limitation triggering N-osmolyte extra production
       type (type_diagnostic_variable_id) :: id_lD      ! Cell-bound calcite - used by calcifiers only
       type (type_diagnostic_variable_id) :: id_fPIR1y, id_yprod
 
@@ -197,6 +198,7 @@ contains
 
       ! Register diagnostic variables (i.e., model outputs)
       call self%register_diagnostic_variable(self%id_netPI, 'netPI', 'mg C/m^3/d','net primary production',  output=output_time_step_averaged)
+      call self%register_diagnostic_variable(self%id_ylim, 'ylim', 'adim','limitation for extra N-osm production',  output=output_time_step_averaged)
       call self%register_diagnostic_variable(self%id_fO3PIc,'fO3PIc','mg C/m^3/d','gross primary production',output=output_time_step_averaged)
       call self%register_diagnostic_variable(self%id_fPIO3c,'fPIO3c','mg C/m^3/d','respiration',             output=output_time_step_averaged)
       call self%register_diagnostic_variable(self%id_yprod,'yprod','mg /m^3/d','N-osmolites production', output=output_time_step_averaged)
@@ -460,8 +462,15 @@ contains
          ! y_inc=self%nsmin*(sum-sra-seo-sea)*c + self%nsx*(1._rk-iNI)*(self%nsmax-yCpp)*c
          ! llim=min(1._rk, 200./parEIR)
          ! llim=.6
-          y_inc=self%nsmin*(sum-sra-seo-sea)*c + self%nsx*max(0._rk,(1._rk-iNI/self%llim))*(1._rk-yCpp/self%nsmax)*c
-          y_loss = (sdo+srs)*yP 
+         if (iNI/self%llim.lt.1._rk) then
+          y_inc=self%nsmin*(sum-sra-seo-sea)*c+self%nsmax*c*(1._rk-yCpp/self%nsmax)*self%nsx
+         else
+          y_inc=self%nsmin*(sum-sra-seo-sea)*c
+         endif
+         ! y_inc=self%nsmin*(sum-sra-seo-sea)*c + self%nsx*max(0._rk,(1._rk-iNI/self%llim))*(1._rk-yCpp/self%nsmax)*c
+          y_loss = (sdo+srs)*yP
+
+         _SET_DIAGNOSTIC_(self%id_ylim,(1._rk-iNI/self%llim)) 
 
          _SET_ODE_(self%id_c,(fO3PIc-fPIO3c-fPIRPc-fPIRDc))
 
