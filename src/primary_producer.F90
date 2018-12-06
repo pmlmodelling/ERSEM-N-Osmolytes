@@ -64,7 +64,7 @@ module ersem_primary_producer
       real(rk) :: R1R2,uB1c_O2,urB1_O2
       real(rk) :: qflc,qfRc,qurf
       integer :: Limnut
-      logical :: use_Si, calcify, docdyn, cenh
+      logical :: use_Si, calcify, docdyn, cenh,gbtm, gbtr,gbts
 
    contains
 
@@ -130,6 +130,9 @@ contains
       call self%get_parameter(self%llim,  'llim', 'adim','nutrient threshold scaling factor')
 
       call self%get_parameter(self%docdyn,'docdyn','','use dynamic ratio of labile to semi-labile DOM production', default=.false.)
+      call self%get_parameter(self%gbtm,'gbtm','','reduction in mortality due to gbt production', default=.false.)
+      call self%get_parameter(self%gbtr,'gbtr','','reduction in respiration due to gbt production', default=.false.)
+      call self%get_parameter(self%gbts,'gbts','','reduction in sedimentation due to gbt production', default=.false.)
       if (.not.self%docdyn) call self%get_parameter(self%R1R2,'R1R2','-','labile fraction of produced dissolved organic carbon')
       call self%get_parameter(self%uB1c_O2,'uB1c_O2','mmol O_2/mg C','oxygen produced per unit of carbon fixed')
       call self%get_parameter(self%urB1_O2,'urB1_O2','mmol O_2/mg C','oxygen consumed per unit of carbon respired')
@@ -379,10 +382,14 @@ contains
          end if
 
          ! Nutrient-stress lysis rate :
-         sdo = (1._rk/(MIN(iNs, iNI)+0.1_rk))*self%sdo
-
+         if (self%gbtm) then
+            sdo = (1._rk/(MIN(iNs, iNI)+0.1_rk))*self%sdo*(self%nsmin/yCpp)
+           else
+            sdo = (1._rk/(MIN(iNs, iNI)+0.1_rk))*self%sdo
+         end if
+         
          ! Excretion rate, as regulated by nutrient-stress
-         seo = sum*(1._rk-iNI)*(1._rk-self%pu_ea)
+            seo = sum*(1._rk-iNI)*(1._rk-self%pu_ea)
 
          ! Activity-dependent excretion :
          sea = sum*self%pu_ea
@@ -430,7 +437,11 @@ contains
          ! Respiration..........................................................
 
          ! Rest respiration rate :
-         srs = et*self%srs 
+         if (self%gbtr) then
+           srs = et*self%srs*(self%nsmin/yCpp)
+         else
+           srs = et*self%srs
+         end if 
 
          ! Activity respiration rate :
          sra = sug*self%pu_ra
@@ -462,12 +473,12 @@ contains
          ! y_inc=self%nsmin*(sum-sra-seo-sea)*c + self%nsx*(1._rk-iNI)*(self%nsmax-yCpp)*c
          ! llim=min(1._rk, 200./parEIR)
          ! llim=.6
-         if (iNI/self%llim.lt.1._rk) then
-          y_inc=self%nsmin*(sum-sra-seo-sea)*c+self%nsmax*c*(1._rk-yCpp/self%nsmax)*self%nsx
-         else
-          y_inc=self%nsmin*(sum-sra-seo-sea)*c
-         endif
-         ! y_inc=self%nsmin*(sum-sra-seo-sea)*c + self%nsx*max(0._rk,(1._rk-iNI/self%llim))*(1._rk-yCpp/self%nsmax)*c
+        ! if (iNI/self%llim.lt.1._rk) then
+         ! y_inc=self%nsmin*(sum-sra-seo-sea)*c+self%nsmax*c*(1._rk-yCpp/self%nsmax)*self%nsx
+         !else
+         ! y_inc=self%nsmin*(sum-sra-seo-sea)*c
+         !endif
+          y_inc=self%nsmin*(sum-sra-seo-sea)*c + self%nsx*max(0._rk,(1._rk-iNI/self%llim))*(1._rk-yCpp/self%nsmax)*c
           y_loss = (sdo+srs)*yP
 
          _SET_DIAGNOSTIC_(self%id_ylim,(1._rk-iNI/self%llim)) 
@@ -594,17 +605,19 @@ contains
       class (type_ersem_primary_producer),intent(in) :: self
       _DECLARE_ARGUMENTS_LOCAL_
 
-      real(rk) :: c,p,n
-      real(rk) :: qpc,qnc
+      real(rk) :: c,p,n,y
+      real(rk) :: qpc,qnc,yCpp
       real(rk) :: SD
       real(rk) :: iNp,iNn,iNI
 
       _GET_WITH_BACKGROUND_(self%id_c,c)
       _GET_WITH_BACKGROUND_(self%id_p,p)
       _GET_WITH_BACKGROUND_(self%id_n,n)
+      _GET_WITH_BACKGROUND_(self%id_y,y)
       
       qpc = p/c
       qnc = n/c
+      yCpp = y/c
 
       iNp = MIN(1._rk,  &
                MAX(0._rk, (qpc-self%qplc) / (self%xqcp*qpRPIcX-self%qplc) ))
@@ -620,7 +633,11 @@ contains
       end if
 
       ! Sedimentation and resting stages.....................................
-      SD = self%resm * MAX(0._rk, self%esni - iNI) + self%rm
+      if (self%gbts) then
+        SD = self%resm * MAX(0._rk, self%esni - iNI)*(self%nsmin/yCpp) + self%rm
+      else
+        SD = self%resm * MAX(0._rk, self%esni - iNI)+ self%rm
+      end if
    end function
 
    subroutine get_vertical_movement(self,_ARGUMENTS_GET_VERTICAL_MOVEMENT_)
