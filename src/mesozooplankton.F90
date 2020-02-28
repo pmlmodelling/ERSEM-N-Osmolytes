@@ -28,9 +28,7 @@ module ersem_mesozooplankton
       type (type_dependency_id)          :: id_totprey
       type (type_horizontal_dependency_id) :: id_inttotprey
 
-      if (self%gbtm) then
       type (type_diagnostic_variable_id) :: id_fZIR1y
-      end if
       type (type_diagnostic_variable_id) :: id_fZIO3c,id_calc
       type (type_diagnostic_variable_id) :: id_fZIRDc,id_fZIRPc
       type (type_diagnostic_variable_id) :: id_fZIRDn,id_fZIRPn,id_fZINIn
@@ -50,6 +48,7 @@ module ersem_mesozooplankton
       real(rk) :: xR1n,xR1p
 
       real(rk) :: Minprey,repw,mort
+      logical :: gbtm
 
       ! ERSEM global parameters
       real(rk) :: R1R2,urB1_O2
@@ -103,6 +102,7 @@ contains
       call self%get_parameter(self%xR1p,   'xR1p','-','transfer of phosphorus to DOM, relative to POM',default=0._rk)
       call self%get_parameter(self%xR1n,   'xR1n','-','transfer of nitrogen to DOM, relative to POM',default=0._rk)
       call self%get_parameter(self%urB1_O2,'urB1_O2','mmol O_2/mg C','oxygen consumed per carbon respired')
+      call self%get_parameter(self%gbtm,'gbtm','','use of N-osmolytes dynamic', default=.false.)
 
       call self%get_parameter(self%gutdiss,'gutdiss','-','fraction of prey calcite that dissolves after ingestion')
 
@@ -201,7 +201,7 @@ contains
       call self%register_state_dependency(self%id_R1c,'R1c','mg C/m^3',  'dissolved organic carbon')
       call self%register_state_dependency(self%id_R1p,'R1p','mmol P/m^3','dissolved organic phosphorus')
       call self%register_state_dependency(self%id_R1n,'R1n','mmol N/m^3','dissolved organic nitrogen')
-      call self%register_state_dependency(self%id_R1y,'R1y','mmol Nos/m^3','dissolved nitrogen osmolytes')
+      if (self%gbtm) call self%register_state_dependency(self%id_R1y,'R1y','mmol Nos/m^3','dissolved nitrogen osmolytes')
 
       ! Register links to external semi-labile dissolved organic matter pools.
       call self%register_state_dependency(self%id_R2c,'R2c','mg C/m^3','semi-labile dissolved organic carbon')
@@ -387,11 +387,15 @@ contains
 
             ! Carbon flux to labile dissolved, refractory dissolved, and particulate organic matter.
             _SET_ODE_(self%id_R1c, + fZIRDc * self%R1R2)
+
+            if (self%gbtm) then
             _SET_ODE_(self%id_R1y, + (ret * self%R1R2)*preyCY)
+            _SET_DIAGNOSTIC_(self%id_fZIR1y,(fZIRDc * self%R1R2)*preyCY)
+            end if
+ 
             _SET_ODE_(self%id_R2c, + fZIRDc * (1._rk-self%R1R2))
             _SET_ODE_(self%id_RPc, + fZIRPc)
 
-            _SET_DIAGNOSTIC_(self%id_fZIR1y,(fZIRDc * self%R1R2)*preyCY)
 
             ! Account for CO2 production and oxygen consumption in respiration.
             _SET_ODE_(self%id_O3c, + fZIO3c/CMass)
@@ -478,8 +482,7 @@ contains
             _SET_DIAGNOSTIC_(self%id_fZINIn,excess_n)
             _SET_DIAGNOSTIC_(self%id_fZINIp,excess_p)
 
-         else
-
+          else
             ! Insufficient prey - overwintering
             _GET_(self%id_c,cP)
 

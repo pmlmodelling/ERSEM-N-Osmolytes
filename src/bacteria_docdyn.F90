@@ -18,17 +18,12 @@ module ersem_bacteria_docdyn
       type (type_state_variable_id) :: id_R1c, id_R2c, id_R3c
       type (type_state_variable_id) :: id_R1p
       type (type_state_variable_id) :: id_R1n, id_R1y
-      if (self%gbtm) then
-      type (type_state_variable_id) :: id_R1y
-      end if
       type (type_state_variable_id) :: id_N1p,id_N4n,id_N7f
       type (type_dependency_id)     :: id_ETW,id_eO2mO2
       type (type_state_variable_id),allocatable,dimension(:) :: id_RPc,id_RPp,id_RPn,id_RPf
       type (type_model_id),         allocatable,dimension(:) :: id_RP
 
-      if (self%gbtm) then
       type (type_diagnostic_variable_id) :: id_fR1B1y
-      end if
       type (type_diagnostic_variable_id) :: id_fB1O3c, id_fB1NIn, id_fB1N1p
       type (type_diagnostic_variable_id) :: id_fR1B1c, id_fR2B1c, id_fR3B1c,id_fB1R1c, id_fB1R2c, id_fB1R3c
       type (type_diagnostic_variable_id) :: id_fR1B1n,id_fB1R1n,id_fR1B1p,id_fB1R1p
@@ -46,6 +41,7 @@ module ersem_bacteria_docdyn
       real(rk) :: rR2B1X,rR3B1X
       real(rk),allocatable :: sRPR1(:)
       real(rk) :: frB1R3
+      logical :: gbtm
 
       ! Remineralization
       real(rk) :: sR1N1X,sR1N4X
@@ -91,6 +87,7 @@ contains
       call self%get_parameter(self%qpB1cX,  'qpc',     'mmol P/mg C','maximum phosphorus to carbon ratio')
       call self%get_parameter(self%qnB1cX,  'qnc',     'mmol N/mg C','maximum nitrogen to carbon ratio')
       call self%get_parameter(self%urB1_O2X,'ur_O2',   'mmol O_2/mg C','oxygen consumed per carbon respired')
+      call self%get_parameter(self%gbtm,'gbtm','','use N-osmolytes dynamic ', default=.false.)
 
       ! Remineralization parameters
       call self%get_parameter(self%sR1N1X,   'sR1N1',   '1/d',    'mineralisation rate of labile dissolved organic phosphorus')
@@ -172,7 +169,6 @@ contains
       end if
 
       ! Contribute to aggregate fluxes.
-      call self%add_to_aggregate_variable(bacterial_respiration_rate,self%id_fB1O3c)
 
       call self%register_diagnostic_variable(self%id_fB1O3c,'fB1O3c','mg C/m^3/d','respiration')
       call self%register_diagnostic_variable(self%id_fB1NIn,'fB1NIn','mmol N/m^3/d','release of DIN')
@@ -240,7 +236,9 @@ contains
          _GET_(self%id_R1c,R1cP)
          _GET_(self%id_R1p,R1pP)
          _GET_(self%id_R1n,R1nP)
+         if (self%gbtm) then
          _GET_(self%id_R1y,R1yP)
+         end if
 
          _GET_WITH_BACKGROUND_(self%id_R3c,R3c)
          _GET_(self%id_R2c,R2cP)
@@ -317,14 +315,15 @@ contains
          ELSE
             BGE=0._rk
          ENDIF
-          _SET_DIAGNOSTIC_(self%id_BGE,BGE)
 
 !..Source equations
 
 
          _SET_ODE_(self%id_c,netb1)
          _SET_ODE_(self%id_R1c,+ fB1R1c - sugB1*R1cP)
+         if (self%gbtm) then
          _SET_ODE_(self%id_R1y, - sugB1*R1yP)
+         end if 
          _SET_ODE_(self%id_R2c,+ fB1R2c - sugB1*R2cP*self%rR2B1X)
          _SET_ODE_(self%id_R3c,+ fB1R3c - sugB1*R3cP*self%rR3B1X)
 
@@ -341,7 +340,9 @@ contains
 
          _SET_ODE_(self%id_O3c,+ fB1O3c/CMass)
          _SET_ODE_(self%id_O2o,- fB1O3c*self%urB1_O2X)
+         if (self%gbtm) then
          _SET_DIAGNOSTIC_(self%id_fR1B1y,sugB1*R1yP)
+         end if
 !..Phosphorus dynamics in bacteria........................................
 
          IF ((qpB1c - self%qpB1cX).gt.0._rk) THEN

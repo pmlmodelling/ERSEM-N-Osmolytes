@@ -38,9 +38,10 @@ module ersem_primary_producer
       ! Identifiers for state variables of other models
       type (type_state_variable_id) :: id_O3c,id_O2o,id_TA                  ! dissolved inorganic carbon, oxygen, total alkalinity
       type (type_state_variable_id) :: id_N1p,id_N3n,id_N4n,id_N5s,id_N7f   ! nutrients: phosphate, nitrate, ammonium, silicate, iron
-      type (type_state_variable_id) :: id_R1c,id_R1p,id_R1n,id_R1y,id_R2c          ! dissolved organic carbon (R1: labile, R2: semi-labile)
+      type (type_state_variable_id) :: id_R1c,id_R1p,id_R1n,id_R2c          ! dissolved organic carbon (R1: labile, R2: semi-labile)
       type (type_state_variable_id) :: id_RPc,id_RPp,id_RPn,id_RPs,id_RPf   ! particulate organic carbon
-      type (type_state_variable_id) :: id_L2c                               ! Free calcite (liths) - used by calcifiers only
+      type (type_state_variable_id) :: id_L2                               ! Free calcite (liths) - used by calcifiers only
+      type (type_state_variable_id) :: id_R1y
 
       ! Environmental dependencies
       type (type_dependency_id)            :: id_parEIR,id_ETW   ! PAR and temperature
@@ -52,11 +53,8 @@ module ersem_primary_producer
       type (type_diagnostic_variable_id) :: id_fPIO3c  ! Respiration rate
       type (type_diagnostic_variable_id) :: id_fN3PIn,id_fN4PIn,id_fN1PIp,id_fN5PIs  ! nutrient uptake
       type (type_diagnostic_variable_id) :: id_netPI   ! Net primary production rate
-      type (type_diagnostic_variable_id) :: id_ylim   ! limitation triggering N-osmolyte extra production
       type (type_diagnostic_variable_id) :: id_lD      ! Cell-bound calcite - used by calcifiers only
-      if if (self%gbtm) then
-      type (type_diagnostic_variable_id) :: id_fPIR1y, id_yprod
-      end if
+      type (type_diagnostic_variable_id) :: id_fPIR1y, id_yprod, id_ylim
       type (type_diagnostic_variable_id) :: id_O3L2c   ! Calcification
       type (type_diagnostic_variable_id) :: id_fPIRPc,id_fPIRPn,id_fPIRPp,id_fPIRPs  ! Total loss to Particulate detritus
       type (type_diagnostic_variable_id) :: id_fPIR1c,id_fPIR1n,id_fPIR1p ! Total loss to labile dissovled detritus
@@ -131,15 +129,18 @@ contains
       call self%get_parameter(self%beta,  'beta', 'mg C m^2/mg Chl/W/d','photoinhibition parameter')
       call self%get_parameter(self%phim,  'phim', 'mg Chl/mg C','maximum effective chlorophyll to carbon photosynthesis ratio')
       call self%get_parameter(self%Limnut,'Limnut','',          'nitrogen-phosphorus colimitation formulation (0: geometric mean, 1: minimum, 2: harmonic mean)')
+
+      if (self%gbtm) then
       call self%get_parameter(self%nsmin,  'nsmin', 'umol y/mg C','min N-osmolytes to carbon ratio')
       call self%get_parameter(self%nsmax,  'nsmax', 'umol y/mg C','max N-osmolytes to carbon ratio')
       call self%get_parameter(self%nsx,  'nsx', 'umol y/mg C/ d ','max specific rate of y production under stress')
       call self%get_parameter(self%llim,  'llim', 'adim','nutrient threshold scaling factor')
+      end if
 
       call self%get_parameter(self%docdyn,'docdyn','','use dynamic ratio of labile to semi-labile DOM production', default=.false.)
-      call self%get_parameter(self%gbtm,'gbtm','','reduction in mortality due to gbt production', default=.false.)
+      call self%get_parameter(self%gbtm,'gbtm','','use of N-posmolytes dynamics', default=.false.)
       call self%get_parameter(self%gbtr,'gbtr','','reduction in respiration due to gbt production', default=.false.)
-      call self%get_parameter(self%gbts,'gbts','','reduction in sedimentation due to gbt production', default=.false.)
+      call self%get_parameter(self%gbts,'gbts','','enable N-osmolyte effect on mortality, sinking and rest resp.', default=.false.)
       if (.not.self%docdyn) call self%get_parameter(self%R1R2,'R1R2','-','labile fraction of produced dissolved organic carbon')
       call self%get_parameter(self%uB1c_O2,'uB1c_O2','mmol O_2/mg C','oxygen produced per unit of carbon fixed')
       call self%get_parameter(self%urB1_O2,'urB1_O2','mmol O_2/mg C','oxygen consumed per unit of carbon respired')
@@ -165,7 +166,7 @@ contains
       call self%add_constituent('p',4.288e-8_rk,c0*qprpicX)
       call self%add_constituent('f',5.e-6_rk,   0.0_rk)  ! NB this does nothing if iron support is disabled.
       call self%add_constituent('chl',3.e-6_rk, c0*self%phim)
-      call self%add_constituent('y',3.e-6_rk, 0._rk)
+      if (self%gbtm)  call self%add_constituent('y',3.e-6_rk, 0._rk)
       if (self%use_Si) call self%add_constituent('s',1.e-6_rk,c0*self%qsc)
 
       ! Register links to external nutrient pools.
@@ -179,7 +180,7 @@ contains
       call self%register_state_dependency(self%id_R1c,'R1c','mg C/m^3',  'dissolved organic carbon')
       call self%register_state_dependency(self%id_R1p,'R1p','mmol P/m^3','dissolved organic phosphorus')
       call self%register_state_dependency(self%id_R1n,'R1n','mmol N/m^3','dissolved organic nitrogen')
-      call self%register_state_dependency(self%id_R1y,'R1y','umol /m^3','dissolved N-osmolytes')
+      if (self%gbtm) call self%register_state_dependency(self%id_R1y,'R1y','umol /m^3','dissolved N-osmolytes')
 
       ! Register links to external semi-labile dissolved organic matter pool (sink for excretion and lysis).
       call self%register_state_dependency(self%id_R2c,'R2c','mg C/m^3','semi-labile dissolved organic carbon')
@@ -213,8 +214,6 @@ contains
       call self%register_diagnostic_variable(self%id_fPIR1y,'fPIR1y','mg /m^3/d','N-osmolites release', output=output_time_step_averaged)
       end if  
       ! Contribute to aggregate fluxes.
-      call self%add_to_aggregate_variable(phytoplankton_respiration_rate,self%id_fPIO3c)
-      call self%add_to_aggregate_variable(photosynthesis_rate,self%id_fO3PIc)
       call self%register_diagnostic_variable(self%id_netPI, 'netPI', 'mg C/m^3/d','net primary production')
       call self%register_diagnostic_variable(self%id_fO3PIc,'fO3PIc','mg C/m^3/d','gross primary production')
       call self%register_diagnostic_variable(self%id_fPIO3c,'fPIO3c','mg C/m^3/d','respiration')
@@ -239,7 +238,7 @@ contains
          call self%register_dependency(self%id_RainR,'RainR','-','rain ratio (PIC : POC)')
 
          ! Link to external detached liths (sink for calcite of dying phytoplankton)
-         call self%register_state_dependency(self%id_L2c,'L2c','mg C/m^3','free calcite')
+     !    call self%register_state_dependency(self%id_L2c,'L2c','mg C/m^3','free calcite')
 
          ! Create diagnostic variable for cell-bound calcite, and register its contribution to the known quantity "total_calcite_in_biota".
          ! This quantity can be used by other models (e.g., predators) to determine how much calcite is released when phytoplankton is broken down.
@@ -307,14 +306,18 @@ contains
          _GET_WITH_BACKGROUND_(self%id_p,p)
          _GET_WITH_BACKGROUND_(self%id_n,n)
          _GET_WITH_BACKGROUND_(self%id_chl,Chl)
+         if (self%gbtm) then
          _GET_WITH_BACKGROUND_(self%id_y,y)
+         end if
 
          ! Concentrations excluding background (used in sink terms)
          _GET_(self%id_c,cP)
          _GET_(self%id_p,pP)
          _GET_(self%id_n,nP)
          _GET_(self%id_chl,ChlP)
+         if (self%gbtm) then
          _GET_(self%id_y,yP)
+         end if
 
          ! Retrieve ambient nutrient concentrations
          _GET_(self%id_N1p,N1pP)
@@ -330,7 +333,10 @@ contains
          qpc = p/c
          qnc = n/c
          ChlCpp = Chl/c
+
+         if (self%gbtm) then
          yCpp= y/c
+         end if
 
          ! Regulation factors...................................................
 
@@ -406,7 +412,7 @@ contains
          end if
 
          ! Nutrient-stress lysis rate :
-         if (self%gbtm) then
+         if (self%gbtm.and.self%gbts) then
             sdo = (1._rk/(MIN(iNs, iNI)+0.1_rk))*self%sdo*(self%nsmin/yCpp)
            else
             sdo = (1._rk/(MIN(iNs, iNI)+0.1_rk))*self%sdo
@@ -456,7 +462,7 @@ contains
 
             ! For dying cells: convert virtual cell-attached calcite to actual calcite in free liths.
             ! Update DIC and lith balances accordingly (only now take away the DIC needed to form the calcite)
-            _SET_ODE_(self%id_L2c,   fPIRPc*RainR)
+     !       _SET_ODE_(self%id_L2c,   fPIRPc*RainR)
             _SET_DIAGNOSTIC_(self%id_O3L2c,fPIRPc*RainR)
             _SET_ODE_(self%id_O3c,  -fPIRPc*RainR/Cmass)
             _SET_ODE_(self%id_TA, -2*fPIRPc*RainR/Cmass)   ! CaCO3 formation decreases alkalinity by 2 units
@@ -465,7 +471,7 @@ contains
          ! Respiration..........................................................
 
          ! Rest respiration rate :
-         if (self%gbtr) then
+         if (self%gbtm.and.self%gbts) then
            srs = et*self%srs*(self%nsmin/yCpp)
          else
            srs = et*self%srs
@@ -515,11 +521,14 @@ contains
          _SET_ODE_(self%id_c,(fO3PIc-fPIO3c-fPIRPc-fPIRDc))
 
          _SET_ODE_(self%id_R1c,fPIR1c)
-         _SET_ODE_(self%id_R1y,sdo*yP)
          _SET_ODE_(self%id_R2c,fPIR2c)
          _SET_ODE_(self%id_RPc,fPIRPc)
          _SET_ODE_(self%id_chl,(Chl_inc - Chl_loss))
+
+         if (self%gbtm) then
+         _SET_ODE_(self%id_R1y,sdo*yP)
          _SET_ODE_(self%id_y,(y_inc - y_loss))
+         end if
 
          _SET_ODE_(self%id_O3c,(fPIO3c - fO3PIc)/CMass)
          _SET_ODE_(self%id_O2o,(fO3PIc*self%uB1c_O2 - fPIO3c*self%urB1_O2))
@@ -527,9 +536,11 @@ contains
          ! Save rates of photosynthesis (a.k.a., gross primary production) and respiration
          _SET_DIAGNOSTIC_(self%id_fPIO3c,fPIO3c)
          _SET_DIAGNOSTIC_(self%id_fO3PIc,fO3PIc)
+
+         if (self%gbtm) then
          _SET_DIAGNOSTIC_(self%id_yprod,y_inc)
          _SET_DIAGNOSTIC_(self%id_fPIR1y,sdo*yP)
-
+         end if
          _SET_DIAGNOSTIC_(self%id_fPIR1c,fPIR1c)
          _SET_DIAGNOSTIC_(self%id_fPIR2c,fPIR2c)
          _SET_DIAGNOSTIC_(self%id_fPIRPc,fPIRPc)
@@ -665,8 +676,9 @@ contains
 
       qpc = p/c
       qnc = n/c
+      if (self%gbtm) then
       yCpp = y/c
-
+      end if
       iNp = MIN(1._rk,  &
                MAX(0._rk, (qpc-self%qplc) / (self%xqcp*qpRPIcX-self%qplc) ))
       iNn = MIN(1._rk,  &
@@ -681,7 +693,7 @@ contains
       end if
 
       ! Sedimentation and resting stages.....................................
-      if (self%gbts) then
+      if (self%gbtm.and.self%gbts) then
         SD = self%resm * MAX(0._rk, self%esni - iNI)*(self%nsmin/yCpp) + self%rm
       else
         SD = self%resm * MAX(0._rk, self%esni - iNI)+ self%rm

@@ -24,9 +24,7 @@ module ersem_microzooplankton
       type (type_state_variable_id)      :: id_N1p,id_N4n
       type (type_dependency_id)          :: id_ETW,id_eO2mO2
 
-      if (self%gbtm) then
       type (type_diagnostic_variable_id) :: id_fZIR1y
-      end if
       type (type_diagnostic_variable_id) :: id_fZIO3c,id_calc
       type (type_diagnostic_variable_id) :: id_fZIRDc,id_fZIRPc
       type (type_diagnostic_variable_id) :: id_fZIRDn,id_fZIRPn,id_fZINIn
@@ -43,6 +41,7 @@ module ersem_microzooplankton
       real(rk) :: pe_R1
       real(rk) :: gutdiss
       real(rk) :: xR1n,xR1p
+      logical :: gbtm
 
       ! ERSEM global parameters
       real(rk) :: R1R2,urB1_O2
@@ -91,6 +90,7 @@ contains
       call self%get_parameter(self%xR1p,   'xR1p','-','transfer of phosphorus to DOM, relative to POM',default=1._rk)
       call self%get_parameter(self%xR1n,   'xR1n','-','transfer of nitrogen to DOM, relative to POM',default=1._rk)
       call self%get_parameter(self%urB1_O2,'urB1_O2','mmol O_2/mg C','oxygen consumed per carbon respired')
+      call self%get_parameter(self%gbtm,'gbtm','','use of N-osmolytes dynamic', default=.false.)
 
       call self%get_parameter(self%gutdiss,'gutdiss','-','fraction of prey calcite that dissolves after ingestion')
 
@@ -156,8 +156,9 @@ contains
       call self%register_state_dependency(self%id_R1c,'R1c','mg C/m^3',  'dissolved organic carbon')
       call self%register_state_dependency(self%id_R1p,'R1p','mmol P/m^3','dissolved organic phosphorus')
       call self%register_state_dependency(self%id_R1n,'R1n','mmol N/m^3','dissolved organic nitrogen')
+      if (self%gbtm) then
       call self%register_state_dependency(self%id_R1y,'R1y','mmol Nos/m^3','dissolved nitrogen osmolytes')
-
+      end if
       ! Register links to external semi-labile dissolved organic matter pools.
       call self%register_state_dependency(self%id_R2c,'R2c','mg C/m^3','semi-labile dissolved organic carbon')
 
@@ -189,7 +190,6 @@ contains
       call self%register_diagnostic_variable(self%id_fZIR1y,'fZIR1y','mg /m^3/d','NoS production',output=output_time_step_averaged)
       end if
       ! Contribute to aggregate fluxes.
-      call self%add_to_aggregate_variable(zooplankton_respiration_rate,self%id_fZIO3c)
       call self%register_diagnostic_variable(self%id_fZIO3c,'fZIO3c','mg C/m^3/d','respiration')
       call self%register_diagnostic_variable(self%id_fZINIn,'fZINIn','mmol N/m^3/d','release of DIN')
       call self%register_diagnostic_variable(self%id_fZINIp,'fZINIp','mmol P/m^3/d','release of DIP')
