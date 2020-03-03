@@ -15,13 +15,13 @@ module ersem_bacteria
    type,extends(type_ersem_pelagic_base),public :: type_ersem_bacteria
       ! Variables
       type (type_state_variable_id) :: id_O3c, id_O2o, id_TA
-      type (type_state_variable_id) :: id_R1c, id_R1p, id_R1n
+      type (type_state_variable_id) :: id_R1c, id_R1p, id_R1n,id_R1y
       type (type_state_variable_id) :: id_R2c
       type (type_state_variable_id) :: id_N1p,id_N4n,id_N7f
       type (type_dependency_id)     :: id_ETW,id_eO2mO2
       type (type_state_variable_id),allocatable,dimension(:) :: id_RPc,id_RPp,id_RPn,id_RPf
       type (type_model_id),         allocatable,dimension(:) :: id_RP
-      type (type_diagnostic_variable_id) :: id_fB1O3c, id_fB1NIn, id_fB1N1p
+      type (type_diagnostic_variable_id) :: id_fB1O3c, id_fB1NIn, id_fB1N1p,id_fR1B1y
       type (type_diagnostic_variable_id) :: id_minn,id_minp
 
       ! Parameters
@@ -42,6 +42,7 @@ module ersem_bacteria
       real(rk) :: fsinkX
       real(rk) :: redfieldX
       real(rk) :: rR2R1X
+      logical :: gbtm
    contains
 !     Model procedures
       procedure :: initialize
@@ -83,6 +84,7 @@ contains
       call self%get_parameter(self%qpB1cX,  'qpc',     'mmol P/mg C','maximum phosphorus to carbon ratio')
       call self%get_parameter(self%qnB1cX,  'qnc',     'mmol N/mg C','maximum nitrogen to carbon ratio')
       call self%get_parameter(self%urB1_O2X,'ur_O2',   'mmol O_2/mg C','oxygen consumed per carbon respired')
+      call self%get_parameter(self%gbtm,'gbtm','','use N-osmolytes dynamic ', default=.false.)
 
       ! Remineralization parameters
       call self%get_parameter(self%sR1N1X,   'sR1N1',   '1/d',    'mineralisation rate of labile dissolved organic phosphorus')
@@ -109,6 +111,9 @@ contains
       call self%register_state_dependency(self%id_R1c,'R1c','mg C/m^3',  'labile dissolved organic carbon')
       call self%register_state_dependency(self%id_R1p,'R1p','mmol P/m^3','labile dissolved organic phosphorus')
       call self%register_state_dependency(self%id_R1n,'R1n','mmol N/m^3','labile dissolved organic nitrogen')
+      if (self%gbtm) then
+      call self%register_state_dependency(self%id_R1y,'R1y','umol/m^3','dissolved nitrogen osmolytes')
+      end if
 
       ! Register links to semi-labile dissolved organic matter pools.
       call self%register_state_dependency(self%id_R2c,'R2c','mg C/m^3','semi-labile dissolved organic carbon')
@@ -153,6 +158,9 @@ contains
       call self%register_dependency(self%id_eO2mO2,standard_variables%fractional_saturation_of_oxygen)
 
       ! Register diagnostics.
+      if (self%gbtm) then
+      call self%register_diagnostic_variable(self%id_fR1B1y,'fR1B1y','mg y/m^3/d','fR1B1y',output=output_time_step_averaged)
+      end if
       call self%register_diagnostic_variable(self%id_fB1O3c,'fB1O3c','mg C/m^3/d','respiration')
       call self%register_diagnostic_variable(self%id_fB1NIn,'fB1NIn','mmol N/m^3/d','release of DIN')
       call self%register_diagnostic_variable(self%id_fB1N1p,'fB1N1p','mmol P/m^3/d','release of DIP')
@@ -170,7 +178,7 @@ contains
       real(rk) :: ETW,eO2mO2
       real(rk) :: B1c,B1n,B1p
       real(rk) :: B1cP,B1nP,B1pP
-      real(rk) :: N1pP,N4nP,R1c,R1cP,R1pP,R1nP,R2c
+      real(rk) :: N1pP,N4nP,R1c,R1cP,R1pP,R1nP,R2c,R1y,R1yP
       real(rk) :: qpB1c,qnB1c
       real(rk) :: etB1,eO2B1
       real(rk) :: sB1RD,sutB1,rumB1,sugB1,rugB1,rraB1,fB1O3c
@@ -202,6 +210,9 @@ contains
          _GET_(self%id_R1c,R1cP)
          _GET_(self%id_R1p,R1pP)
          _GET_(self%id_R1n,R1nP)
+         if (self%gbtm) then
+         _GET_(self%id_R1y,R1yP)
+         end if
 
          qpB1c = B1p/B1c
          qnB1c = B1n/B1c
@@ -270,6 +281,11 @@ contains
          _SET_ODE_(self%id_c,netb1)
          _SET_ODE_(self%id_R1c,- rugB1 + (fB1RDc * self%R1R2X))
          _SET_ODE_(self%id_R2c,+ (fB1RDc * (1._rk - self%R1R2X)))
+
+         if (self%gbtm) then   !accounting for dissolved N-osmolytes
+         _SET_ODE_(self%id_R1y, - sugB1*R1yP)
+         _SET_DIAGNOSTIC_(self%id_fR1B1y,sugB1*R1yP)
+         end if
 
          _SET_ODE_(self%id_O3c,+ fB1O3c/CMass)
          _SET_ODE_(self%id_O2o,- fB1O3c*self%urB1_O2X)

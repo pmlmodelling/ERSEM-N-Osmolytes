@@ -18,6 +18,13 @@
 ! Iron use is controlled by use_iron defined in ersem/shared.F90.
 !
 ! CO2-enhanced photosynthesis is controlled by runtime switch cenh.
+
+! Simulations of intracellular N-osmolyte concentration and extracellular dissolved 
+! N-osmolyte compounds can be activated by setting the "gbtm" flag in the run-time configuration (.yaml file)
+! By using the "gbts" flag it is  possible to activate the reduction in phytoplankton sinking, mortality and rest respiration
+! as function of intracellular N-osmolyte concentrations. This latter function was developed to test the hypothesis that 
+! increased N-osmolyte concentration gives competitive advantage to dinoflagellates during the summer season in the Weatern English
+! Channel (L4 station)  
 ! -----------------------------------------------------------------------------
 
 module ersem_primary_producer
@@ -40,7 +47,7 @@ module ersem_primary_producer
       type (type_state_variable_id) :: id_N1p,id_N3n,id_N4n,id_N5s,id_N7f   ! nutrients: phosphate, nitrate, ammonium, silicate, iron
       type (type_state_variable_id) :: id_R1c,id_R1p,id_R1n,id_R2c          ! dissolved organic carbon (R1: labile, R2: semi-labile)
       type (type_state_variable_id) :: id_RPc,id_RPp,id_RPn,id_RPs,id_RPf   ! particulate organic carbon
-      type (type_state_variable_id) :: id_L2                               ! Free calcite (liths) - used by calcifiers only
+      type (type_state_variable_id) :: id_L2c                               ! Free calcite (liths) - used by calcifiers only
       type (type_state_variable_id) :: id_R1y
 
       ! Environmental dependencies
@@ -130,6 +137,9 @@ contains
       call self%get_parameter(self%phim,  'phim', 'mg Chl/mg C','maximum effective chlorophyll to carbon photosynthesis ratio')
       call self%get_parameter(self%Limnut,'Limnut','',          'nitrogen-phosphorus colimitation formulation (0: geometric mean, 1: minimum, 2: harmonic mean)')
 
+      call self%get_parameter(self%gbtm,'gbtm','','use of N-posmolytes dynamics', default=.false.)
+      call self%get_parameter(self%gbts,'gbts','','enable N-osmolyte effect on mortality, sinking and rest resp.', default=.false.)
+
       if (self%gbtm) then
       call self%get_parameter(self%nsmin,  'nsmin', 'umol y/mg C','min N-osmolytes to carbon ratio')
       call self%get_parameter(self%nsmax,  'nsmax', 'umol y/mg C','max N-osmolytes to carbon ratio')
@@ -138,9 +148,6 @@ contains
       end if
 
       call self%get_parameter(self%docdyn,'docdyn','','use dynamic ratio of labile to semi-labile DOM production', default=.false.)
-      call self%get_parameter(self%gbtm,'gbtm','','use of N-posmolytes dynamics', default=.false.)
-      call self%get_parameter(self%gbtr,'gbtr','','reduction in respiration due to gbt production', default=.false.)
-      call self%get_parameter(self%gbts,'gbts','','enable N-osmolyte effect on mortality, sinking and rest resp.', default=.false.)
       if (.not.self%docdyn) call self%get_parameter(self%R1R2,'R1R2','-','labile fraction of produced dissolved organic carbon')
       call self%get_parameter(self%uB1c_O2,'uB1c_O2','mmol O_2/mg C','oxygen produced per unit of carbon fixed')
       call self%get_parameter(self%urB1_O2,'urB1_O2','mmol O_2/mg C','oxygen consumed per unit of carbon respired')
@@ -210,8 +217,8 @@ contains
       ! Register diagnostic variables (i.e., model outputs)
       if (self%gbtm) then
       call self%register_diagnostic_variable(self%id_ylim, 'ylim', 'adim','limitation for extra N-osm production',  output=output_time_step_averaged)
-      call self%register_diagnostic_variable(self%id_yprod,'yprod','mg /m^3/d','N-osmolites production', output=output_time_step_averaged)
-      call self%register_diagnostic_variable(self%id_fPIR1y,'fPIR1y','mg /m^3/d','N-osmolites release', output=output_time_step_averaged)
+      call self%register_diagnostic_variable(self%id_yprod,'yprod','umol /m^3/d','N-osmolites production', output=output_time_step_averaged)
+      call self%register_diagnostic_variable(self%id_fPIR1y,'fPIR1y','umol /m^3/d','N-osmolites release', output=output_time_step_averaged)
       end if  
       ! Contribute to aggregate fluxes.
       call self%register_diagnostic_variable(self%id_netPI, 'netPI', 'mg C/m^3/d','net primary production')
@@ -238,7 +245,7 @@ contains
          call self%register_dependency(self%id_RainR,'RainR','-','rain ratio (PIC : POC)')
 
          ! Link to external detached liths (sink for calcite of dying phytoplankton)
-     !    call self%register_state_dependency(self%id_L2c,'L2c','mg C/m^3','free calcite')
+         call self%register_state_dependency(self%id_L2c,'L2c','mg C/m^3','free calcite')
 
          ! Create diagnostic variable for cell-bound calcite, and register its contribution to the known quantity "total_calcite_in_biota".
          ! This quantity can be used by other models (e.g., predators) to determine how much calcite is released when phytoplankton is broken down.
@@ -462,7 +469,7 @@ contains
 
             ! For dying cells: convert virtual cell-attached calcite to actual calcite in free liths.
             ! Update DIC and lith balances accordingly (only now take away the DIC needed to form the calcite)
-     !       _SET_ODE_(self%id_L2c,   fPIRPc*RainR)
+            _SET_ODE_(self%id_L2c,   fPIRPc*RainR)
             _SET_DIAGNOSTIC_(self%id_O3L2c,fPIRPc*RainR)
             _SET_ODE_(self%id_O3c,  -fPIRPc*RainR/Cmass)
             _SET_ODE_(self%id_TA, -2*fPIRPc*RainR/Cmass)   ! CaCO3 formation decreases alkalinity by 2 units
@@ -501,21 +508,18 @@ contains
            Chl_inc = iNI*rho*(sum-sra-seo-sea)*c
          endif
          Chl_loss = (sdo+srs)*ChlP
+
          if (self%gbtm) then
-         ! y changes (note that y is a component of PXc and not involved
-         ! in mass balance)
-         ! y_inc=self%nsmin*(sum-sra-seo-sea)*c + self%nsx*(1._rk-iNI)*(self%nsmax-yCpp)*c
-         ! llim=min(1._rk, 200./parEIR)
-         ! llim=.6
-        ! if (iNI/self%llim.lt.1._rk) then
-         ! y_inc=self%nsmin*(sum-sra-seo-sea)*c+self%nsmax*c*(1._rk-yCpp/self%nsmax)*self%nsx
-         !else
-         ! y_inc=self%nsmin*(sum-sra-seo-sea)*c
-         !endif
+         ! note that y ( cellular N-osmolyte concentration) is a component of PXc and is not involved in mass conservation
           y_inc=self%nsmin*(sum-sra-seo-sea)*c + self%nsx*max(0._rk,(1._rk-iNI/self%llim))*(1._rk-yCpp/self%nsmax)*c
           y_loss = (sdo+srs)*yP
 
-         _SET_DIAGNOSTIC_(self%id_ylim,(1._rk-iNI/self%llim)) 
+          _SET_ODE_(self%id_R1y,sdo*yP)
+          _SET_ODE_(self%id_y,(y_inc - y_loss))
+
+         _SET_DIAGNOSTIC_(self%id_ylim,(1._rk-iNI/self%llim))
+         _SET_DIAGNOSTIC_(self%id_yprod,y_inc)
+         _SET_DIAGNOSTIC_(self%id_fPIR1y,sdo*yP) 
          end if
 
          _SET_ODE_(self%id_c,(fO3PIc-fPIO3c-fPIRPc-fPIRDc))
@@ -525,10 +529,6 @@ contains
          _SET_ODE_(self%id_RPc,fPIRPc)
          _SET_ODE_(self%id_chl,(Chl_inc - Chl_loss))
 
-         if (self%gbtm) then
-         _SET_ODE_(self%id_R1y,sdo*yP)
-         _SET_ODE_(self%id_y,(y_inc - y_loss))
-         end if
 
          _SET_ODE_(self%id_O3c,(fPIO3c - fO3PIc)/CMass)
          _SET_ODE_(self%id_O2o,(fO3PIc*self%uB1c_O2 - fPIO3c*self%urB1_O2))
@@ -537,10 +537,6 @@ contains
          _SET_DIAGNOSTIC_(self%id_fPIO3c,fPIO3c)
          _SET_DIAGNOSTIC_(self%id_fO3PIc,fO3PIc)
 
-         if (self%gbtm) then
-         _SET_DIAGNOSTIC_(self%id_yprod,y_inc)
-         _SET_DIAGNOSTIC_(self%id_fPIR1y,sdo*yP)
-         end if
          _SET_DIAGNOSTIC_(self%id_fPIR1c,fPIR1c)
          _SET_DIAGNOSTIC_(self%id_fPIR2c,fPIR2c)
          _SET_DIAGNOSTIC_(self%id_fPIRPc,fPIRPc)

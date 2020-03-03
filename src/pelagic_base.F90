@@ -92,7 +92,7 @@ contains
          call self%get_parameter(s0,'s0','mmol Si/m^3','background silicon concentration',default=qsRPIcX*c0)
          call self%add_constituent('s',0.0_rk,s0)
       end if
-      if (index(composition,'y')/=0) call self%add_constituent('y',0.0_rk)
+      if (index(composition,'y')/=0) call self%add_constituent('y',0.0_rk)  !N-osmolytes intracellular concentration
       if (index(composition,'f')/=0) call self%add_constituent('f',0.0_rk)
 
    end subroutine

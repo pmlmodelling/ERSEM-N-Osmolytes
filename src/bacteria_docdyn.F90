@@ -110,7 +110,7 @@ contains
       ! Register links to labile dissolved organic matter pools.
       call self%register_state_dependency(self%id_R1c,'R1c','mg C/m^3',  'labile dissolved organic carbon')
       if (self%gbtm) then
-      call self%register_state_dependency(self%id_R1y,'R1y','mg C/m^3','dissolved nitrogen osmolytes')
+      call self%register_state_dependency(self%id_R1y,'R1y','umol/m^3','dissolved nitrogen osmolytes')
       end if    
       call self%register_state_dependency(self%id_R1p,'R1p','mmol P/m^3','labile dissolved organic phosphorus')
       call self%register_state_dependency(self%id_R1n,'R1n','mmol N/m^3','labile dissolved organic nitrogen')
@@ -321,9 +321,12 @@ contains
 
          _SET_ODE_(self%id_c,netb1)
          _SET_ODE_(self%id_R1c,+ fB1R1c - sugB1*R1cP)
-         if (self%gbtm) then
+
+         if (self%gbtm) then   !accounting for dissolved N-osmolytes
          _SET_ODE_(self%id_R1y, - sugB1*R1yP)
-         end if 
+         _SET_DIAGNOSTIC_(self%id_fR1B1y,sugB1*R1yP)
+         end if
+ 
          _SET_ODE_(self%id_R2c,+ fB1R2c - sugB1*R2cP*self%rR2B1X)
          _SET_ODE_(self%id_R3c,+ fB1R3c - sugB1*R3cP*self%rR3B1X)
 
@@ -340,9 +343,6 @@ contains
 
          _SET_ODE_(self%id_O3c,+ fB1O3c/CMass)
          _SET_ODE_(self%id_O2o,- fB1O3c*self%urB1_O2X)
-         if (self%gbtm) then
-         _SET_DIAGNOSTIC_(self%id_fR1B1y,sugB1*R1yP)
-         end if
 !..Phosphorus dynamics in bacteria........................................
 
          IF ((qpB1c - self%qpB1cX).gt.0._rk) THEN
