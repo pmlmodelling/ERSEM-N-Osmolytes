@@ -25,8 +25,8 @@ module ersem_bacteria_docdyn
 
       type (type_diagnostic_variable_id) :: id_fR1B1y
       type (type_diagnostic_variable_id) :: id_fB1O3c, id_fB1NIn, id_fB1N1p
-      type (type_diagnostic_variable_id) :: id_fR1B1c, id_fR2B1c, id_fR3B1c,id_fB1R1c, id_fB1R2c, id_fB1R3c
-      type (type_diagnostic_variable_id) :: id_fR1B1n,id_fB1R1n,id_fR1B1p,id_fB1R1p
+      type (type_diagnostic_variable_id) :: id_fR1B1c, id_fR2B1c, id_fR3B1c,id_fRPB1c,id_fB1R1c, id_fB1R2c, id_fB1R3c
+      type (type_diagnostic_variable_id) :: id_fR1B1n,id_fB1R1n,id_fR1B1p,id_fB1R1p,id_fRPB1n,id_fRPB1p
       type (type_diagnostic_variable_id) :: id_minn,id_minp
       ! Parameters
       integer  :: nRP
@@ -183,6 +183,9 @@ contains
       call self%register_diagnostic_variable(self%id_fR1B1c,'fR1B1c','mg C/m^3/d','uptake of labile DOC ')
       call self%register_diagnostic_variable(self%id_fR2B1c,'fR2B1c','mg C/m^3/d','uptake of semi-labile DOC ')
       call self%register_diagnostic_variable(self%id_fR3B1c,'fR3B1c','mg C/m^3/d','uptake of semi-refractory DOC ')
+      call self%register_diagnostic_variable(self%id_fRPB1c,'fRPB1c','mg C/m^3/d','total uptake of POC')
+      call self%register_diagnostic_variable(self%id_fRPB1n,'fRPB1n','mg N/m^3/d','total uptake of PON')
+      call self%register_diagnostic_variable(self%id_fRPB1p,'fRPB1p','mg P/m^3/d','total uptake of POP')
       call self%register_diagnostic_variable(self%id_fR1B1n,'fR1B1n','mmol N/m^3/d','uptake of DON')
       call self%register_diagnostic_variable(self%id_fR1B1p,'fR1B1p','mmol P/m^3/d','uptake of DOP')
 
@@ -334,6 +337,7 @@ contains
          _SET_DIAGNOSTIC_(self%id_fB1R2c, fB1R2c)
          _SET_DIAGNOSTIC_(self%id_fB1R3c, fB1R3c)
          _SET_DIAGNOSTIC_(self%id_fR1B1c, sugB1*R1cP)
+         _SET_DIAGNOSTIC_(self%id_fRPB1c, sum(fRPB1c))
          _SET_DIAGNOSTIC_(self%id_fR2B1c, sugB1*R2cP*self%rR2B1X)
          _SET_DIAGNOSTIC_(self%id_fR3B1c, sugB1*R3cP*self%rR3B1X)
 
@@ -378,6 +382,7 @@ contains
          _SET_DIAGNOSTIC_(self%id_fB1N1p,fB1N1p)
          _SET_DIAGNOSTIC_(self%id_fB1R1p, fB1RDp)
          _SET_DIAGNOSTIC_(self%id_fR1B1p, fR1B1p)
+         _SET_DIAGNOSTIC_(self%id_fRPB1p, sum(fRPB1p))
 
 !..Nitrogen dynamics in bacteria........................................
 
@@ -413,6 +418,7 @@ contains
          _SET_DIAGNOSTIC_(self%id_fB1NIn,fB1NIn)
          _SET_DIAGNOSTIC_(self%id_fB1R1n, fB1RDn)
          _SET_DIAGNOSTIC_(self%id_fR1B1n, fR1B1n)
+         _SET_DIAGNOSTIC_(self%id_fRPB1n, sum(fRPB1n))
 
       ! Leave spatial loops (if any)
       _LOOP_END_
