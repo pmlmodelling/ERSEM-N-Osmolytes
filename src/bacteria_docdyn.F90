@@ -87,7 +87,7 @@ contains
       call self%get_parameter(self%qpB1cX,  'qpc',     'mmol P/mg C','maximum phosphorus to carbon ratio')
       call self%get_parameter(self%qnB1cX,  'qnc',     'mmol N/mg C','maximum nitrogen to carbon ratio')
       call self%get_parameter(self%urB1_O2X,'ur_O2',   'mmol O_2/mg C','oxygen consumed per carbon respired')
-      call self%get_parameter(self%gbtm,'gbtm','','use N-osmolytes dynamic ', default=.false.)
+      call self%get_parameter(self%gbtm,    'gbtm',    '',           'use N-osmolytes dynamic', default=.false.)
 
       ! Remineralization parameters
       call self%get_parameter(self%sR1N1X,   'sR1N1',   '1/d',    'mineralisation rate of labile dissolved organic phosphorus')
@@ -109,9 +109,7 @@ contains
 
       ! Register links to labile dissolved organic matter pools.
       call self%register_state_dependency(self%id_R1c,'R1c','mg C/m^3',  'labile dissolved organic carbon')
-      if (self%gbtm) then
-      call self%register_state_dependency(self%id_R1y,'R1y','umol/m^3','dissolved nitrogen osmolytes')
-      end if    
+      if (self%gbtm) call self%register_state_dependency(self%id_R1y,'R1y','umol/m^3','dissolved nitrogen osmolytes')
       call self%register_state_dependency(self%id_R1p,'R1p','mmol P/m^3','labile dissolved organic phosphorus')
       call self%register_state_dependency(self%id_R1n,'R1n','mmol N/m^3','labile dissolved organic nitrogen')
 
@@ -164,11 +162,7 @@ contains
 
       ! Register diagnostics.
 
-      if (self%gbtm) then
-      call self%register_diagnostic_variable(self%id_fR1B1y,'fR1B1y','mg y/m^3/d','fR1B1y',output=output_time_step_averaged)
-      end if
-
-      ! Contribute to aggregate fluxes.
+      if (self%gbtm) call self%register_diagnostic_variable(self%id_fR1B1y,'fR1B1y','mg y/m^3/d','fR1B1y')
 
       call self%register_diagnostic_variable(self%id_fB1O3c,'fB1O3c','mg C/m^3/d','respiration')
       call self%register_diagnostic_variable(self%id_fB1NIn,'fB1NIn','mmol N/m^3/d','release of DIN')
@@ -240,7 +234,7 @@ contains
          _GET_(self%id_R1p,R1pP)
          _GET_(self%id_R1n,R1nP)
          if (self%gbtm) then
-         _GET_(self%id_R1y,R1yP)
+            _GET_(self%id_R1y,R1yP)
          end if
 
          _GET_WITH_BACKGROUND_(self%id_R3c,R3c)
@@ -326,8 +320,8 @@ contains
          _SET_ODE_(self%id_R1c,+ fB1R1c - sugB1*R1cP)
 
          if (self%gbtm) then   !accounting for dissolved N-osmolytes
-         _SET_ODE_(self%id_R1y, - sugB1*R1yP)
-         _SET_DIAGNOSTIC_(self%id_fR1B1y,sugB1*R1yP)
+            _SET_ODE_(self%id_R1y, - sugB1*R1yP)
+            _SET_DIAGNOSTIC_(self%id_fR1B1y,sugB1*R1yP)
          end if
  
          _SET_ODE_(self%id_R2c,+ fB1R2c - sugB1*R2cP*self%rR2B1X)
@@ -347,6 +341,7 @@ contains
 
          _SET_ODE_(self%id_O3c,+ fB1O3c/CMass)
          _SET_ODE_(self%id_O2o,- fB1O3c*self%urB1_O2X)
+
 !..Phosphorus dynamics in bacteria........................................
 
          IF ((qpB1c - self%qpB1cX).gt.0._rk) THEN

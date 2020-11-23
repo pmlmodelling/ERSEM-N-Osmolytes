@@ -21,7 +21,6 @@ module ersem_pelagic_base
 
       ! Target variables for sedimentation
       type (type_bottom_state_variable_id),allocatable,dimension(:) ::id_targetc,id_targetn,id_targetp,id_targets,id_targetf,id_targety
- 
 
       real(rk) :: rm = 0.0_rk
       real(rk) :: tdep

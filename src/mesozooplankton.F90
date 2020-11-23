@@ -102,7 +102,7 @@ contains
       call self%get_parameter(self%xR1p,   'xR1p','-','transfer of phosphorus to DOM, relative to POM',default=0._rk)
       call self%get_parameter(self%xR1n,   'xR1n','-','transfer of nitrogen to DOM, relative to POM',default=0._rk)
       call self%get_parameter(self%urB1_O2,'urB1_O2','mmol O_2/mg C','oxygen consumed per carbon respired')
-      call self%get_parameter(self%gbtm,'gbtm','','use of N-osmolytes dynamic', default=.false.)
+      call self%get_parameter(self%gbtm,   'gbtm','','use of N-osmolytes dynamic', default=.false.)
 
       call self%get_parameter(self%gutdiss,'gutdiss','-','fraction of prey calcite that dissolves after ingestion')
 
@@ -230,10 +230,7 @@ contains
       call self%register_dependency(self%id_eO2mO2,standard_variables%fractional_saturation_of_oxygen)
 
       ! Register diagnostics
-
-      if (self%gbtm) then
-      call self%register_diagnostic_variable(self%id_fZIR1y,'fZIR1y','mg /m^3/d','NoS production',output=output_time_step_averaged)
-      end if
+      if (self%gbtm) call self%register_diagnostic_variable(self%id_fZIR1y,'fZIR1y','mg /m^3/d','NoS production')
       call self%register_diagnostic_variable(self%id_fZIO3c,'fZIO3c','mg C/m^3/d','respiration')
       call self%register_diagnostic_variable(self%id_fZINIn,'fZINIn','mmol N/m^3/d','release of DIN')
       call self%register_diagnostic_variable(self%id_fZINIp,'fZINIp','mmol P/m^3/d','release of DIP')
@@ -389,13 +386,12 @@ contains
             _SET_ODE_(self%id_R1c, + fZIRDc * self%R1R2)
 
             if (self%gbtm) then
-            _SET_ODE_(self%id_R1y, + (ret * self%R1R2)*preyCY)
-            _SET_DIAGNOSTIC_(self%id_fZIR1y,(fZIRDc * self%R1R2)*preyCY)
+               _SET_ODE_(self%id_R1y, + (ret * self%R1R2)*preyCY)
+               _SET_DIAGNOSTIC_(self%id_fZIR1y,(fZIRDc * self%R1R2)*preyCY)
             end if
  
             _SET_ODE_(self%id_R2c, + fZIRDc * (1._rk-self%R1R2))
             _SET_ODE_(self%id_RPc, + fZIRPc)
-
 
             ! Account for CO2 production and oxygen consumption in respiration.
             _SET_ODE_(self%id_O3c, + fZIO3c/CMass)
@@ -482,7 +478,8 @@ contains
             _SET_DIAGNOSTIC_(self%id_fZINIn,excess_n)
             _SET_DIAGNOSTIC_(self%id_fZINIp,excess_p)
 
-          else
+         else
+
             ! Insufficient prey - overwintering
             _GET_(self%id_c,cP)
 

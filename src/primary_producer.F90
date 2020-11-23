@@ -141,10 +141,10 @@ contains
       call self%get_parameter(self%gbts,'gbts','','enable N-osmolyte effect on mortality, sinking and rest resp.', default=.false.)
 
       if (self%gbtm) then
-      call self%get_parameter(self%nsmin,  'nsmin', 'umol y/mg C','min N-osmolytes to carbon ratio')
-      call self%get_parameter(self%nsmax,  'nsmax', 'umol y/mg C','max N-osmolytes to carbon ratio')
-      call self%get_parameter(self%nsx,  'nsx', 'umol y/mg C/ d ','max specific rate of y production under stress')
-      call self%get_parameter(self%llim,  'llim', 'adim','nutrient threshold scaling factor')
+         call self%get_parameter(self%nsmin,  'nsmin', 'umol y/mg C','min N-osmolytes to carbon ratio')
+         call self%get_parameter(self%nsmax,  'nsmax', 'umol y/mg C','max N-osmolytes to carbon ratio')
+         call self%get_parameter(self%nsx,  'nsx', 'umol y/mg C/ d ','max specific rate of y production under stress')
+         call self%get_parameter(self%llim,  'llim', 'adim','nutrient threshold scaling factor')
       end if
 
       call self%get_parameter(self%docdyn,'docdyn','','use dynamic ratio of labile to semi-labile DOM production', default=.false.)
@@ -216,11 +216,10 @@ contains
 
       ! Register diagnostic variables (i.e., model outputs)
       if (self%gbtm) then
-      call self%register_diagnostic_variable(self%id_ylim, 'ylim', 'adim','limitation for extra N-osm production',  output=output_time_step_averaged)
-      call self%register_diagnostic_variable(self%id_yprod,'yprod','umol /m^3/d','N-osmolites production', output=output_time_step_averaged)
-      call self%register_diagnostic_variable(self%id_fPIR1y,'fPIR1y','umol /m^3/d','N-osmolites release', output=output_time_step_averaged)
-      end if  
-      ! Contribute to aggregate fluxes.
+         call self%register_diagnostic_variable(self%id_ylim, 'ylim', 'adim','limitation for extra N-osm production')
+         call self%register_diagnostic_variable(self%id_yprod,'yprod','umol /m^3/d','N-osmolites production')
+         call self%register_diagnostic_variable(self%id_fPIR1y,'fPIR1y','umol /m^3/d','N-osmolites release')
+      end if
       call self%register_diagnostic_variable(self%id_netPI, 'netPI', 'mg C/m^3/d','net primary production')
       call self%register_diagnostic_variable(self%id_fO3PIc,'fO3PIc','mg C/m^3/d','gross primary production')
       call self%register_diagnostic_variable(self%id_fPIO3c,'fPIO3c','mg C/m^3/d','respiration')
@@ -314,7 +313,7 @@ contains
          _GET_WITH_BACKGROUND_(self%id_n,n)
          _GET_WITH_BACKGROUND_(self%id_chl,Chl)
          if (self%gbtm) then
-         _GET_WITH_BACKGROUND_(self%id_y,y)
+            _GET_WITH_BACKGROUND_(self%id_y,y)
          end if
 
          ! Concentrations excluding background (used in sink terms)
@@ -323,7 +322,7 @@ contains
          _GET_(self%id_n,nP)
          _GET_(self%id_chl,ChlP)
          if (self%gbtm) then
-         _GET_(self%id_y,yP)
+            _GET_(self%id_y,yP)
          end if
 
          ! Retrieve ambient nutrient concentrations
@@ -341,9 +340,7 @@ contains
          qnc = n/c
          ChlCpp = Chl/c
 
-         if (self%gbtm) then
-         yCpp= y/c
-         end if
+         if (self%gbtm) yCpp= y/c
 
          ! Regulation factors...................................................
 
@@ -418,15 +415,15 @@ contains
             cenh = 1.0_rk
          end if
 
-         ! Nutrient-stress lysis rate :
+         ! Nutrient-stress lysis rate (1/d)
          if (self%gbtm.and.self%gbts) then
             sdo = (1._rk/(MIN(iNs, iNI)+0.1_rk))*self%sdo*(self%nsmin/yCpp)
            else
             sdo = (1._rk/(MIN(iNs, iNI)+0.1_rk))*self%sdo
          end if
-         
-         ! Excretion rate, as regulated by nutrient-stress
-            seo = sum*(1._rk-iNI)*(1._rk-self%pu_ea)
+
+         ! Excretion rate, as regulated by nutrient-stress (1/d)
+         seo = sum*(1._rk-iNI)*(1._rk-self%pu_ea)
 
          ! Activity-dependent excretion (1/d)
          sea = sum*self%pu_ea
@@ -477,7 +474,7 @@ contains
 
          ! Respiration..........................................................
 
-         ! Rest respiration rate :
+         ! Rest respiration rate (1/d)
          if (self%gbtm.and.self%gbts) then
            srs = et*self%srs*(self%nsmin/yCpp)
          else
@@ -510,16 +507,16 @@ contains
          Chl_loss = (sdo+srs)*ChlP
 
          if (self%gbtm) then
-         ! note that y ( cellular N-osmolyte concentration) is a component of PXc and is not involved in mass conservation
-          y_inc=self%nsmin*(sum-sra-seo-sea)*c + self%nsx*max(0._rk,(1._rk-iNI/self%llim))*(1._rk-yCpp/self%nsmax)*c
-          y_loss = (sdo+srs)*yP
+            ! note that y ( cellular N-osmolyte concentration) is a component of PXc and is not involved in mass conservation
+            y_inc=self%nsmin*(sum-sra-seo-sea)*c + self%nsx*max(0._rk,(1._rk-iNI/self%llim))*(1._rk-yCpp/self%nsmax)*c
+            y_loss = (sdo+srs)*yP
 
-          _SET_ODE_(self%id_R1y,sdo*yP)
-          _SET_ODE_(self%id_y,(y_inc - y_loss))
+            _SET_ODE_(self%id_R1y,sdo*yP)
+            _SET_ODE_(self%id_y,(y_inc - y_loss))
 
-         _SET_DIAGNOSTIC_(self%id_ylim,(1._rk-iNI/self%llim))
-         _SET_DIAGNOSTIC_(self%id_yprod,y_inc)
-         _SET_DIAGNOSTIC_(self%id_fPIR1y,sdo*yP) 
+            _SET_DIAGNOSTIC_(self%id_ylim,(1._rk-iNI/self%llim))
+            _SET_DIAGNOSTIC_(self%id_yprod,y_inc)
+            _SET_DIAGNOSTIC_(self%id_fPIR1y,sdo*yP) 
          end if
 
          _SET_ODE_(self%id_c,(fO3PIc-fPIO3c-fPIRPc-fPIRDc))
@@ -528,7 +525,6 @@ contains
          _SET_ODE_(self%id_R2c,fPIR2c)
          _SET_ODE_(self%id_RPc,fPIRPc)
          _SET_ODE_(self%id_chl,(Chl_inc - Chl_loss))
-
 
          _SET_ODE_(self%id_O3c,(fPIO3c - fO3PIc)/CMass)
          _SET_ODE_(self%id_O2o,(fO3PIc*self%uB1c_O2 - fPIO3c*self%urB1_O2))
@@ -667,14 +663,12 @@ contains
       _GET_WITH_BACKGROUND_(self%id_p,p)
       _GET_WITH_BACKGROUND_(self%id_n,n)
       if (self%gbtm) then
-      _GET_WITH_BACKGROUND_(self%id_y,y)
+         _GET_WITH_BACKGROUND_(self%id_y,y)
       end if 
 
       qpc = p/c
       qnc = n/c
-      if (self%gbtm) then
-      yCpp = y/c
-      end if
+      if (self%gbtm) yCpp = y/c
       iNp = MIN(1._rk,  &
                MAX(0._rk, (qpc-self%qplc) / (self%xqcp*qpRPIcX-self%qplc) ))
       iNn = MIN(1._rk,  &
@@ -690,9 +684,9 @@ contains
 
       ! Sedimentation and resting stages.....................................
       if (self%gbtm.and.self%gbts) then
-        SD = self%resm * MAX(0._rk, self%esni - iNI)*(self%nsmin/yCpp) + self%rm
+         SD = self%resm * MAX(0._rk, self%esni - iNI)*(self%nsmin/yCpp) + self%rm
       else
-        SD = self%resm * MAX(0._rk, self%esni - iNI)+ self%rm
+         SD = self%resm * MAX(0._rk, self%esni - iNI)+ self%rm
       end if
    end function
 

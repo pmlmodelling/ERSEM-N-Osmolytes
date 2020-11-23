@@ -84,7 +84,7 @@ contains
       call self%get_parameter(self%qpB1cX,  'qpc',     'mmol P/mg C','maximum phosphorus to carbon ratio')
       call self%get_parameter(self%qnB1cX,  'qnc',     'mmol N/mg C','maximum nitrogen to carbon ratio')
       call self%get_parameter(self%urB1_O2X,'ur_O2',   'mmol O_2/mg C','oxygen consumed per carbon respired')
-      call self%get_parameter(self%gbtm,'gbtm','','use N-osmolytes dynamic ', default=.false.)
+      call self%get_parameter(self%gbtm,    'gbtm',    '',           'use N-osmolytes dynamic', default=.false.)
 
       ! Remineralization parameters
       call self%get_parameter(self%sR1N1X,   'sR1N1',   '1/d',    'mineralisation rate of labile dissolved organic phosphorus')
@@ -111,9 +111,7 @@ contains
       call self%register_state_dependency(self%id_R1c,'R1c','mg C/m^3',  'labile dissolved organic carbon')
       call self%register_state_dependency(self%id_R1p,'R1p','mmol P/m^3','labile dissolved organic phosphorus')
       call self%register_state_dependency(self%id_R1n,'R1n','mmol N/m^3','labile dissolved organic nitrogen')
-      if (self%gbtm) then
-      call self%register_state_dependency(self%id_R1y,'R1y','umol/m^3','dissolved nitrogen osmolytes')
-      end if
+      if (self%gbtm) call self%register_state_dependency(self%id_R1y,'R1y','umol/m^3','dissolved nitrogen osmolytes')
 
       ! Register links to semi-labile dissolved organic matter pools.
       call self%register_state_dependency(self%id_R2c,'R2c','mg C/m^3','semi-labile dissolved organic carbon')
@@ -158,9 +156,7 @@ contains
       call self%register_dependency(self%id_eO2mO2,standard_variables%fractional_saturation_of_oxygen)
 
       ! Register diagnostics.
-      if (self%gbtm) then
-      call self%register_diagnostic_variable(self%id_fR1B1y,'fR1B1y','mg y/m^3/d','fR1B1y',output=output_time_step_averaged)
-      end if
+      if (self%gbtm) call self%register_diagnostic_variable(self%id_fR1B1y,'fR1B1y','mg y/m^3/d','fR1B1y')
       call self%register_diagnostic_variable(self%id_fB1O3c,'fB1O3c','mg C/m^3/d','respiration')
       call self%register_diagnostic_variable(self%id_fB1NIn,'fB1NIn','mmol N/m^3/d','release of DIN')
       call self%register_diagnostic_variable(self%id_fB1N1p,'fB1N1p','mmol P/m^3/d','release of DIP')
@@ -211,7 +207,7 @@ contains
          _GET_(self%id_R1p,R1pP)
          _GET_(self%id_R1n,R1nP)
          if (self%gbtm) then
-         _GET_(self%id_R1y,R1yP)
+            _GET_(self%id_R1y,R1yP)
          end if
 
          qpB1c = B1p/B1c
@@ -283,8 +279,8 @@ contains
          _SET_ODE_(self%id_R2c,+ (fB1RDc * (1._rk - self%R1R2X)))
 
          if (self%gbtm) then   !accounting for dissolved N-osmolytes
-         _SET_ODE_(self%id_R1y, - sugB1*R1yP)
-         _SET_DIAGNOSTIC_(self%id_fR1B1y,sugB1*R1yP)
+            _SET_ODE_(self%id_R1y, - sugB1*R1yP)
+            _SET_DIAGNOSTIC_(self%id_fR1B1y,sugB1*R1yP)
          end if
 
          _SET_ODE_(self%id_O3c,+ fB1O3c/CMass)
